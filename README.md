@@ -1,5 +1,9 @@
 # helps
 
+> [!WARNING]
+> **BETA. WORK IN PROGRESS. NOT READY FOR EVERYDAY USE.**
+> **THINGS WILL CHANGE AND BREAK WITHOUT NOTICE. PLEASE DO NOT INSTALL IT YET UNLESS YOU ARE HELPING TO TEST IT.**
+
 An assistant for Claude Code, Codex and Gemini CLI. It keeps one main thing, saves everything else
 for later and goes through the decisions waiting in your projects with you. It asks with pop-up
 buttons and talks in plain words, so there are no commands to type.

@@ -16,7 +16,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.join(ROOT, 'src')
 
 const NAME = 'helps'
-const DESCRIPTION = 'An assistant that keeps one main thing, saves everything else for later and goes through ' +
+const DESCRIPTION = 'BETA, not ready for everyday use. An assistant that keeps one main thing, saves everything else for later and goes through ' +
   'waiting decisions with you, with buttons and plain words.'
 const AUTHOR = { name: 'uaskpro' }
 const REPO = 'https://github.com/uaskpro/helps'
