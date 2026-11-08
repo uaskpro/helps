@@ -14,7 +14,7 @@
 //   config.json        optional: extra owner-section headings and alert prefixes
 //   state.json         internal: answered decisions, when offers were made
 
-export const VERSION = '0.5.1'
+export const VERSION = '0.5.2'
 export const TOOL = 'mcp__helps__run'
 
 const FOCUS_TEMPLATE = (project, finish, today, allow) => `# FOCUS

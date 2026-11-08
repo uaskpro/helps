@@ -134,6 +134,14 @@ export function register(on) {
   on('tool.call', { tool: 'mcp__helps__run' }, async ($, e) => {
     const args = Array.isArray(e.args) ? e.args : []
     const r = await run(makeIo($), args)
+    if (args[0] === 'doctor' && r.code === 0) {
+      // Where this session draws: the lamp band shows on terminal and desktop only.
+      const surfaces = await $.session.surfaces()
+      const panes = await $.ui.panes()
+      r.out += `\nsurfaces: ${surfaces.length ? surfaces.join(', ') : 'none'}` +
+        `\nlamp: level ${health.level}, ${errorText ? 'error ' + errorText : 'ok'}` +
+        `\npanes: ${panes.length ? panes.map((p) => p.id + (p.isPlaced ? ' (placed)' : ' (not placed)')).join(', ') : 'none'}`
+    }
     refresh($)
     if (r.code !== 0) return { isError: true, result: r.err || 'helps: error' }
     return { result: r.out || 'done' }
