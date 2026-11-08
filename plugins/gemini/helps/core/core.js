@@ -14,7 +14,7 @@
 //   config.json        optional: extra owner-section headings and alert prefixes
 //   state.json         internal: answered decisions, when offers were made
 
-export const VERSION = '0.5.2'
+export const VERSION = '0.5.3'
 export const TOOL = 'mcp__helps__run'
 
 const FOCUS_TEMPLATE = (project, finish, today, allow) => `# FOCUS
@@ -153,7 +153,9 @@ export async function makeCtx(io) {
   const today = fixedToday || isoDate(nowMs)
   const stamp = fixedNow || `${isoDate(nowMs)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   const rootsEnv = await io.env('HELPS_PROJECT_ROOTS')
-  const ctx = { io, home, root, today, stamp, expand, rootsEnv, pathSep, cli: io.cli || 'helps',
+  let cwd = ''
+  try { cwd = io.cwd ? norm(await io.cwd()) : '' } catch { /* unknown */ }
+  const ctx = { io, home, root, today, stamp, expand, rootsEnv, pathSep, cwd, cli: io.cli || 'helps',
     f: (name) => join(root, name) }
   ctx.config = await readConfig(ctx)
   return ctx
@@ -405,10 +407,14 @@ async function answerDecision(ctx, id, text) {
 
 // --------------------------------------------------------------- projects
 
+// Folders whose subfolders are projects: where the session runs (it may be a project or a folder
+// of projects, on a local disk or a share), its parent, then the usual places in the home folder.
 function projectRoots(ctx) {
   if (ctx.rootsEnv) return ctx.rootsEnv.split(ctx.pathSep).filter(Boolean).map(ctx.expand)
   const h = ctx.home
-  return ['projects', 'Projects', 'code', 'src', 'dev', 'Documents', 'Desktop'].map((n) => join(h, n)).concat([h])
+  const parent = ctx.cwd.replace(/\/+$/, '').replace(/\/[^/]*$/, '').replace(/^([A-Za-z]:)$/, '$1/')
+  const here = ctx.cwd ? [ctx.cwd, parent].filter((p) => p && p !== h) : []
+  return here.concat(['projects', 'Projects', 'code', 'src', 'dev', 'Documents', 'Desktop'].map((n) => join(h, n)), [h])
 }
 
 async function scanProjects(ctx, limit = 40) {

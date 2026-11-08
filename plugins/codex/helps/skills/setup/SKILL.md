@@ -6,6 +6,7 @@ description: Set up the helps assistant in a minute — pick one main thing and 
 # One-minute setup
 
 The person is not a programmer and does not need to know how this works. Plain words, no commands or paths.
+Setup is three questions and one save, about a minute. Keep it that fast.
 Ask questions through your built-in choice dialog if you have one (for example request_user_input); otherwise as a short numbered list, "reply with a number".
 
 1. See what is on the machine (do not show this to the person):
@@ -15,7 +16,10 @@ Ask questions through your built-in choice dialog if you have one (for example r
    helps status
    ```
 
-2. Ask "What is the main thing now — what do we bring to a result first?". Options: the 3 projects from `scan` changed most recently (label: name and "changed N days ago"), and "Something else". On "Something else", ask them to name it in a word or two.
+   That is all the looking around: never search disks, shares or other machines yourself, and do not
+   count or list files. `scan` already looked where this session runs and in the usual folders.
+
+2. Ask "What is the main thing now — what do we bring to a result first?". Options: the 3 projects from `scan` changed most recently (label: name and "changed N days ago"), and "Something else". On "Something else", ask them to name it in a word or two. If `scan` found no projects, skip the options and just ask them to name it.
 
 3. Ask "When do we call it done?". Options that fit the project, for example:
    "First sale", "Site is live", "Client accepted the work", "My own". Done is an event in the world, not "finish the code". On "My own", ask for one sentence.

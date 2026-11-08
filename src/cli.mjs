@@ -32,6 +32,7 @@ const io = {
   },
   env: async (name) => process.env[name],
   now: async () => Date.now(),
+  cwd: async () => process.cwd(),
 }
 
 // `helps link`: put a `helps` command on PATH (Codex and Gemini skills call it by name).

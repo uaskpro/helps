@@ -43,6 +43,7 @@ function makeIo($) {
     stat: (p, o) => $.fs.stat(p, o),
     env: (n) => envGet($, n),
     now: () => $.clock.now(),
+    cwd: () => $.session.cwd(),
   }
 }
 

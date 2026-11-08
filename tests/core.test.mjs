@@ -193,6 +193,19 @@ test('setup, scan and sources', () => {
   assert.equal(status.sources.length, 1)
 })
 
+test('scan looks where the session runs', () => {
+  makeProject('SHOP')
+  makeProject('NOSTATE', null)
+  const home = path.join(base, 'home')
+  fs.mkdirSync(home)
+  const env = { ...process.env, HOME: home, USERPROFILE: '', HELPS_DATA: data, HELPS_PROJECT_ROOTS: '' }
+  for (const cwd of [projects, path.join(projects, 'SHOP')]) {
+    const r = spawnSync(process.execPath, [CLI, 'scan'], { cwd, env, encoding: 'utf8' })
+    assert.equal(r.status, 0, r.stderr)
+    assert.deepEqual(new Set(JSON.parse(r.stdout).map((p) => p.name)), new Set(['SHOP', 'NOSTATE']))
+  }
+})
+
 test('changing the main thing keeps the notes', () => {
   setupFocus()
   const file = path.join(data, 'FOCUS.md')
