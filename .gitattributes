@@ -1,0 +1,2 @@
+# Build output: copies of src/, not counted twice in language stats
+plugins/** linguist-generated=true

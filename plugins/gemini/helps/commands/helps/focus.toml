@@ -1,0 +1,4 @@
+description = "What is the main thing now"
+prompt = """
+Use the focus skill: show me the main thing now.
+"""

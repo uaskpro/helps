@@ -1,0 +1,14 @@
+{
+  "name": "helps",
+  "version": "0.5.0",
+  "private": true,
+  "description": "An assistant for Claude Code, Codex and Gemini CLI that keeps one main thing and saves everything else for later.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "test": "node --test tests/core.test.mjs"
+  }
+}

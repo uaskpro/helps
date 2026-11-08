@@ -1,0 +1,20 @@
+{
+  "name": "uaskpro-helps",
+  "interface": {
+    "displayName": "uaskpro helps"
+  },
+  "plugins": [
+    {
+      "name": "helps",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex/helps"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

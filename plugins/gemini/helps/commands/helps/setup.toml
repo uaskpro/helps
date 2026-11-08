@@ -1,0 +1,4 @@
+description = "Set up the assistant in a minute"
+prompt = """
+Use the setup skill: set up the assistant with me.
+"""

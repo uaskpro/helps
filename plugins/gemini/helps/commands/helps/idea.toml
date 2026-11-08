@@ -1,0 +1,4 @@
+description = "Save for later"
+prompt = """
+Use the idea skill and save this for later: {{args}}
+"""

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${extensionPath}${/}core${/}cli.mjs\" context --agent gemini",
+            "name": "helps-focus",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

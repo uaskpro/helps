@@ -1,0 +1,4 @@
+description = "Go through waiting decisions"
+prompt = """
+Use the decide skill: let us go through the decisions one by one.
+"""

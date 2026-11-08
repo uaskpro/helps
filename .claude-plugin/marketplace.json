@@ -1,0 +1,14 @@
+{
+  "name": "uaskpro-helps",
+  "owner": {
+    "name": "uaskpro"
+  },
+  "description": "The helps plugin for Claude Code",
+  "plugins": [
+    {
+      "name": "helps",
+      "source": "./plugins/claude/helps",
+      "description": "An assistant that keeps one main thing, saves everything else for later and goes through waiting decisions with you, with buttons and plain words."
+    }
+  ]
+}
