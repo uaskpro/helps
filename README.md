@@ -35,9 +35,9 @@ On first use the assistant asks three questions with buttons: what the main thin
 - once a week: "Look at saved items?" to keep, drop or make one the main thing;
 - a lamp: 🟢 on track, 🟡 starting to drift, 🔴 going the wrong way, 🚨 emergency (blinks).
   In Claude Code it sits above the prompt in the terminal and the desktop app, with the reason
-  and the buttons "Back to the main thing", "Go through decisions" and "Details"; in the status
-  line; and as a row under the latest answer, which every screen shows, the Claude app and the
-  phone included. Codex and Gemini show the same color as a line at the start of the session.
+  and the buttons "Back to the main thing", "Go through decisions" and "Details", and in the
+  status line on every screen, the Claude mobile app included. Codex and Gemini show the same
+  color as a line at the start of the session.
 
 The lamp is worked out from what helps already knows:
 

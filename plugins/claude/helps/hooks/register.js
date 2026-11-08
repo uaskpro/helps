@@ -3,8 +3,7 @@
 // · the mcp__helps__run tool: the assistant's commands for Claude (args as on the command line);
 // · the main thing as a section of the system prompt;
 // · the lamp: every 30 seconds it works out the state and shows it above the prompt (terminal
-//   and desktop), in the status line, and as a row under the latest answer (every surface,
-//   the Claude app and the phone included; earlier rows go blank):
+//   and desktop) and in the status line (every surface, the mobile app included):
 //   🟢 on track · 🟡 starting to drift · 🔴 going the wrong way · 🚨 emergency (blinks).
 // Buttons send a request on the person's behalf; the "Details" pane lists every reason.
 
@@ -21,7 +20,6 @@ let blinkOn = true
 let lastLevel = null
 let errorText = null
 let contextSection = null
-let lampRow = null // id of the row under the latest answer; earlier rows draw nothing
 
 // Variable names stay literal so `claude plugin validate` can list them.
 async function envGet($, name) {
@@ -80,36 +78,6 @@ async function ask($, text) {
 }
 
 const hasKind = (kind) => (health.reasons || []).some((r) => r.kind === kind)
-
-function lampWords() {
-  if (errorText) return 'helps: could not check — ' + errorText
-  if (health.level === 'none') return 'helps is not set up'
-  return (health.project ? 'Main thing: ' + health.project + ' · ' : '') + health.headline
-}
-
-function lampButtons($, Button) {
-  const buttons = []
-  if (health.level === 'none') {
-    buttons.push(Button({ key: 'helps-setup', label: 'Set up', plain: true,
-      onPress: () => ask($, 'Set up the helps assistant with me.') }))
-    return buttons
-  }
-  if (health.level !== 'green') {
-    buttons.push(Button({ key: 'helps-back', label: 'Back to the main thing', plain: true,
-      onPress: () => ask($, 'Let\'s get back to the main thing. What is it now and where did we stop?') }))
-  }
-  if (hasKind('decisions')) {
-    buttons.push(Button({ key: 'helps-decide', label: 'Go through decisions', plain: true,
-      onPress: () => ask($, 'Let\'s go through the decisions waiting for me, one by one.') }))
-  }
-  if ((health.reasons || []).length > 0) {
-    buttons.push(Button({ key: 'helps-more', label: 'Details', plain: true,
-      onPress: async () => {
-        await $.ui.open({ id: PANE, title: 'helps', focus: true, closeOnEscape: true })
-      } }))
-  }
-  return buttons
-}
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
@@ -192,8 +160,31 @@ export function register(on) {
       weight: 'semibold',
       children: [siren ? ' 🚨 EMERGENCY ' : '● '],
     })
-    const words = lampWords()
-    const buttons = lampButtons($, Button)
+    const words = errorText
+      ? 'helps: could not check — ' + errorText
+      : health.level === 'none'
+        ? 'helps is not set up'
+        : (health.project ? 'Main thing: ' + health.project + ' · ' : '') + health.headline
+    const buttons = []
+    if (health.level === 'none') {
+      buttons.push(Button({ key: 'helps-setup', label: 'Set up', plain: true,
+        onPress: () => ask($, 'Set up the helps assistant with me.') }))
+    } else {
+      if (health.level !== 'green') {
+        buttons.push(Button({ key: 'helps-back', label: 'Back to the main thing', plain: true,
+          onPress: () => ask($, 'Let\'s get back to the main thing. What is it now and where did we stop?') }))
+      }
+      if (hasKind('decisions')) {
+        buttons.push(Button({ key: 'helps-decide', label: 'Go through decisions', plain: true,
+          onPress: () => ask($, 'Let\'s go through the decisions waiting for me, one by one.') }))
+      }
+      if ((health.reasons || []).length > 0) {
+        buttons.push(Button({ key: 'helps-more', label: 'Details', plain: true,
+          onPress: async () => {
+            await $.ui.open({ id: PANE, title: 'helps', focus: true, closeOnEscape: true })
+          } }))
+      }
+    }
     const ours = Box({
       flexDirection: 'row',
       columnGap: 2,
@@ -204,41 +195,6 @@ export function register(on) {
     })
     if (!theirs) return ours
     return Box({ flexDirection: 'column', children: [ours, theirs] })
-  })
-
-  // After each answer of the main conversation, the lamp moves under it.
-  on('turn.complete', async ($, e, next) => {
-    const res = await next(e)
-    if (e.agentId === undefined) {
-      try {
-        await refresh($)
-        const id = 'lamp-' + (await $.clock.now())
-        const placed = await $.ui.place({ id })
-        if (placed.isPlaced) {
-          lampRow = id
-          $.ui.invalidate('ui.render')
-        }
-      } catch (err) {
-        // the lamp never breaks the turn
-      }
-    }
-    return res
-  })
-
-  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
-    if (e.props.plugin !== 'helps') return next(e)
-    if (e.props.id !== lampRow) return next(e) // an earlier lamp goes blank
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const siren = health.level === 'siren'
-    return Box({
-      flexDirection: 'row',
-      columnGap: 2,
-      children: [
-        Text({ color: COLORS[health.level] || 'gray', weight: 'semibold',
-          children: [(siren ? '🚨 EMERGENCY · ' : health.lamp + ' ') + lampWords()] }),
-        ...lampButtons($, Button),
-      ],
-    })
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
