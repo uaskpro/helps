@@ -280,3 +280,9 @@ test('gemini commands are TOML', () => {
     assert.match(text, /^description = ".+"\nprompt = """\n[\s\S]+\n"""\n$/)
   }
 })
+
+test('package.json and the core agree on the version', async () => {
+  const { VERSION } = await import('../src/core.js')
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  assert.equal(pkg.version, VERSION)
+})

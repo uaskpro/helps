@@ -105,6 +105,8 @@ plugins/gemini/helps  gemini-extension.json, hooks/hooks.json, skills/, commands
 ```
 
 `plugins/` and the marketplaces are build output; do not edit them by hand, run `npm run build`.
+Raise the version in `src/core.js` and `package.json` with every change you push: installed
+copies update only when the version changes.
 
 ## Codex CLI and Gemini CLI
 
