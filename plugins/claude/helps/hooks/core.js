@@ -72,7 +72,7 @@ export const ASK = {
 
 function words(agent) {
   return 'Talk to the person in plain words and in their language: "main thing", "saved for later", ' +
-    '"waiting for your decision". Do not say "focus", "inbox", "hook", "IDEAS.md" or "STATE.md", ' +
+    '"waiting for your decision". Do not say "focus", "inbox", "hook", "IDEAS.md" or "STATE.md", nor their translations, ' +
     'and do not show commands or paths. ' + (ASK[agent] || ASK.other)
 }
 
@@ -529,9 +529,10 @@ export async function contextText(ctx, agent = 'claude', mark = true) {
   const lines = [
     `[helps] The person's main thing: ${project}. Done when: ${focus.finish || 'not set'}.` +
       (days !== null ? ` Day ${days}.` : ''),
-    `At the start of your first reply this session add one short line: "${hl.lamp} Main thing now: ${project}"` +
-      (hl.level === 'green' ? '.' : ` and the reason for the color: "${hl.headline}".`) +
-      ' Colors: 🟢 on track, 🟡 starting to drift, 🔴 going the wrong way, 🚨 emergency.',
+    `Your first reply this session, whatever the request, starts with one short line: "${hl.lamp} Main thing now: ${project}"` +
+      (hl.level === 'green' ? '' : ` and the reason for the color: "${hl.headline}"`) +
+      ', in the person\'s language. helps works the color out; copy it as given and never pick a color yourself. ' +
+      'Colors: 🟢 on track, 🟡 starting to drift, 🔴 going the wrong way, 🚨 emergency.',
     `If a request pulls away from "${project}", do not start it. Save its gist in one line ` +
       `(${saveIdeaHow(ctx, agent)}), say "Saved for later" and offer two options: ` +
       `"Back to ${project}" and "This matters more, do it now". On "do it now", do it without arguing: ` +
