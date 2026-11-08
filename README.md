@@ -23,6 +23,11 @@ Already in Claude Code (terminal, VS Code, the Code tab)? One line in the prompt
 /plugin install helps --marketplace uaskpro/helps
 ```
 
+Then turn on updates once: `/plugin` → **Marketplaces** → `uaskpro-helps` → **Enable auto-update**.
+Claude Code keeps auto-update off for marketplaces outside Anthropic's own, so without this step
+you stay on the version you installed. A plugin added through claude.ai (the steps above) syncs
+from your account each time Claude Code starts.
+
 Nothing else to install: in Claude Code helps runs entirely inside Claude Code, on Linux, macOS
 and Windows.
 
