@@ -36,6 +36,7 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   const prompts: string[] = []
   const tools: string[] = []
   const status: (string | undefined)[] = []
+  const placed: string[] = []
   const env: Record<string, string> = { HOME: '/home/u', HELPS_TODAY: TODAY, HELPS_NOW: TODAY + ' 09:00' }
   on('session.start', () => ({ cwd: '/work' }))
   on('command.register', () => ({ value: undefined }))
@@ -69,10 +70,12 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   on('ui.status', ($: any, e: any) => { status.push(e.text); return { value: undefined } })
   on('prompt.submit', ($: any, e: any) => { prompts.push(e.text); return { text: e.text } })
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.place', ($: any, e: any) => { placed.push(e.id); return { value: { isPlaced: true, requestId: 'row-' + e.id } } })
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
   on('ui.render', () => ({ type: 'Text', props: {}, children: [] }))
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
   await clock.settle()
-  return { clock, toasts, prompts, tools, status, files: d.fs }
+  return { clock, toasts, prompts, tools, status, placed, files: d.fs }
 }
 
 const DATA = '/home/u/helps-data'
@@ -157,4 +160,24 @@ test('the emergency lamp blinks', async ($, on) => {
   await clock.advance(500)
   const second = await ui.find({ type: 'Text', text: / 🚨 EMERGENCY / })
   expect(Boolean(first.props.inverse)).not.toBe(Boolean(second.props.inverse))
+})
+
+const TURN = { reason: 'answer', answer: 'ok', durationMs: 1000, isAborted: false, turnId: 't1' } as any
+
+test('a lamp row under the latest answer, on every surface; earlier rows go blank', async ($, on) => {
+  const { clock, placed } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await $.turn.complete(TURN)
+  await clock.advance(1000)
+  await $.turn.complete({ ...TURN, turnId: 't2' })
+  expect(placed.length).toBe(2)
+  for (const surface of ['mobile', 'desktop', 'terminal'] as const) {
+    const row = (id: string) => ({ plugin: 'helps', surface, component: 'Placed', requestId: 'row-' + id,
+      viewport: { columns: 100, rows: 40 }, props: { id, plugin: 'helps' } } as any)
+    const latest = await $.ui.mount(row(placed[1]))
+    expect(await latest.find({ type: 'Text', text: /🟢 Main thing: helps · on track: helps/ })).toBeDefined()
+    await latest.unmount()
+    const old = await $.ui.mount(row(placed[0]))
+    expect(await old.find({ type: 'Text', text: /Main thing/ })).toBeUndefined()
+    await old.unmount()
+  }
 })
