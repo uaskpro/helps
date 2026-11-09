@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.1
+
+- **Realign**: a button that tells the session to check itself against the project's own rules,
+  list where it left them, put its process right and carry on. What the lamp recorded goes along.
+
 ## 0.99.0 — release candidate
 
 A full review before 1.0: security, the Claude Code mod, and the path of a first-time user.

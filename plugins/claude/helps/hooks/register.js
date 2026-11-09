@@ -250,10 +250,29 @@ const ASKS = {
   setup: 'Set up the helps assistant with me.',
 }
 
+// "Realign": the session checks itself against the project's own rules, says where it left them, puts
+// its process right and carries on. What the lamp recorded goes along as evidence.
+function realignText(s) {
+  const own = s.outside.filter((o) => !o.asked).slice(-10).map((o) => `${clock(o.at)} ${o.label}`)
+  const facts = []
+  if (own.length) facts.push(`In turns you started yourself since my last message, helps recorded these outside actions: ${own.join('; ')}.`)
+  if (s.drift && s.drift.onTrack === false && s.drift.reason) facts.push(`A drift check noted: ${s.drift.reason}.`)
+  return [
+    'Check your course before you do anything else.',
+    '1. Re-read this project\'s rules: CLAUDE.md or AGENTS.md, the documents they tell you to read, and STATE.md if there is one.',
+    '2. Compare what you have done since my last message with those rules and with what I asked for. List every ' +
+      'place you left them, shortly: reviews, checks or tests skipped or cut; merges, pushes, deploys or server changes ' +
+      'I did not ask for; work outside the task; claims you did not verify.',
+    ...(facts.length ? ['3. ' + facts.join(' ') + ' Say for each whether the rules allowed it.'] : []),
+    `${facts.length ? 4 : 3}. For each item say in one line how you put it right, then put your process right and carry on with the work as the rules say.`,
+  ].join('\n')
+}
+
 // Which buttons the band shows now: [key, label, what it does].
 function buttonList() {
   const b = []
   if (S && S.paused) b.push(['helps-resume', 'Resume', 'resume'])
+  if (main.level !== 'none') b.push(['helps-realign', 'Realign', 'realign'])
   if (main.level === 'none') b.push(['helps-setup', 'Set up helps', 'setup'])
   if (has('outside') || has('alone')) b.push(['helps-report', 'What did you do without me?', 'report'])
   if (has('stuck')) b.push(['helps-stuck', 'What\'s wrong?', 'stuck'])
@@ -280,6 +299,13 @@ function press($, what) {
       if (what === 'pause') $.ui.toast('helps: paused. The session stops at its next step; write to it to go on.')
       return redraw($)
     }).catch(() => {})
+  } else if (what === 'realign') {
+    // The evidence is taken first; then the person has spoken, and the count starts over.
+    const text = S ? realignText(S) : ''
+    $.clock.now().then((now) => { if (S) ownerSpoke(S, '', now); return redraw($) }).catch(() => {})
+    if (text) $.prompt.submit({ text, asUser: true }).catch((err) => {
+      $.ui.toast('helps: ' + String((err && err.message) || err).slice(0, 120))
+    })
   } else ask($, ASKS[what])
 }
 

@@ -430,3 +430,26 @@ test('a newer published version shows beside the lamp, with how to update in Det
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: /Customize → Plugins → helps → Update/ })).toBeDefined()
 })
+
+test('Realign: the session is told to check itself against the project\'s rules, with what the lamp recorded', async ($, on) => {
+  const { status, prompts } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await own($)
+  await bash($, 'bin/merge-task task/a')
+  await bash($, 'scp dist.tar web1:/root/')
+  expect(last(status)).toMatch(/^🟡 shop · 2 outside actions on its own/)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'helps-realign' })
+  const sent = last(prompts)
+  expect(sent).toContain('CLAUDE.md or AGENTS.md')
+  expect(sent).toMatch(/helps recorded these outside actions: \d\d:\d\d merge-task; \d\d:\d\d scp web1\./)
+  expect(sent).toContain('carry on with the work')
+  expect(last(status)).toMatch(/^🟢 shop · on track/) // the person has dealt with it
+})
+
+test('Realign is there on a calm session too, and says nothing it did not see', async ($, on) => {
+  const { prompts } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: 'helps-realign' })
+  expect(last(prompts)).toContain('Re-read this project\'s rules')
+  expect(last(prompts)).not.toContain('helps recorded')
+})

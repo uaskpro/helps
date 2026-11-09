@@ -62,7 +62,7 @@ thing is shown beside it, dimmed.
 
 ```
 ● shop · 3 outside actions on its own: ssh web1, scp web1 · working without you 2 h 15 min     main: helps
-What did you do without me?   Pause   Details
+Realign   What did you do without me?   Pause   Details
 ```
 
 What it watches:
@@ -79,8 +79,12 @@ What it watches:
 
 The buttons fit the reason:
 
+- **Realign** is always there. It tells the session to re-read the project's own rules
+  (`CLAUDE.md` or `AGENTS.md`, what they point to, `STATE.md`), list where it left them since your
+  last message, put its process right and carry on. What the lamp recorded (the outside actions
+  it did on its own, a drift verdict) goes along as evidence.
 - **What did you do without me?**, **What's wrong?**, **Check with me** send that question into
-  the session as if you typed it; it answers when its current turn ends.
+  the session as if you typed it. Like Realign, they are answered when its current turn ends.
 - **Pause** works at once, in the middle of a turn too: from that moment the session's tool calls
   are refused, and it is told to say where things stand and wait. Write to the session, or press
   **Resume**, to let it go on.
