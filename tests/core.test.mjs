@@ -338,3 +338,12 @@ test('the session lamp: thresholds, worst first, drift never red', async () => {
   assert.equal(v.level, 'yellow')
   assert.equal(assess(s, 0, cfg, ['SHOP: site down']).level, 'siren')
 })
+
+test('version comparison for the update notice', async () => {
+  const { isNewer } = await import('../src/session.js')
+  assert.equal(isNewer('0.6.1', '0.6.0'), true)
+  assert.equal(isNewer('0.10.0', '0.9.9'), true)
+  assert.equal(isNewer('0.6.0', '0.6.0'), false)
+  assert.equal(isNewer('0.5.9', '0.6.0'), false)
+  assert.equal(isNewer('garbage', '0.6.0'), false)
+})

@@ -7,16 +7,19 @@
 //   The person's main thing is shown beside it, dimmed; it no longer colors the lamp.
 // Buttons send a request on the person's behalf; the "Details" pane lists every reason.
 
-import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES } from './core.js'
+import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES, VERSION } from './core.js'
 import {
   sessionConfig, newSessionState, ownerSpoke, outsideAction, assess, headline, duration,
-  DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS,
+  DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer,
 } from './session.js'
 
 const PANE = 'helps-lamp'
 const POLL_MS = 30_000
 const BLINK_MS = 500
 const DRIFT_MODEL = 'claude-haiku-5-5'
+// Once every 6 hours helps reads its own published version number; nothing about the person is sent.
+const VERSION_URL = 'https://raw.githubusercontent.com/uaskpro/helps/main/plugins/claude/helps/.claude-plugin/plugin.json'
+const VERSION_EVERY_MS = 6 * 3600_000
 const COLORS = { none: 'gray', green: 'green', yellow: 'yellow', red: 'red', siren: 'red' }
 const LAMP = { green: '🟢', yellow: '🟡', red: '🔴', siren: '🚨' }
 const RANK = { green: 1, yellow: 2, red: 3, siren: 4 }
@@ -31,6 +34,8 @@ let lastLevel = null
 let errorText = null
 let contextSection = null
 let driftBusy = false
+let latest = null // a newer published version, if any
+let lastVersionCheck = null
 
 // Variable names stay literal so `claude plugin validate` can list them.
 async function envGet($, name) {
@@ -74,8 +79,25 @@ function line(now) {
 }
 
 function mainNote() {
-  if (main.level === 'none') return 'helps is not set up'
-  return main.project ? 'main: ' + main.project : ''
+  const update = latest ? `update ${latest} available` : ''
+  const note = main.level === 'none' ? 'helps is not set up' : main.project ? 'main: ' + main.project : ''
+  return [note, update].filter(Boolean).join(' · ')
+}
+
+async function checkVersion($) {
+  if (!cfg.update_check) return
+  const now = await $.clock.now()
+  if (lastVersionCheck !== null && now - lastVersionCheck < VERSION_EVERY_MS) return
+  lastVersionCheck = now
+  try {
+    const r = await $.http.fetch(VERSION_URL)
+    if (!r || !r.ok) return
+    const v = JSON.parse(r.text).version
+    if (isNewer(v, VERSION) && v !== latest) {
+      latest = v
+      $.ui.toast(`helps ${v} is out (you have ${VERSION}). Details shows how to update.`)
+    }
+  } catch { /* offline or blocked: try again later */ }
 }
 
 async function refresh($) {
@@ -94,6 +116,7 @@ async function refreshNow($) {
   } catch (err) {
     errorText = String((err && err.message) || err).slice(0, 200)
   }
+  await checkVersion($)
   await redraw($)
 }
 
@@ -394,6 +417,13 @@ export function register(on) {
       t('m0', `Main thing: ${main.project || '?'}` + (main.finish ? ` · done when: ${main.finish}` : ''), { weight: 'semibold' })
       if (!(main.reasons || []).length) t('m1', 'On track.', { dimColor: true })
       ;(main.reasons || []).forEach((r, i) => t('m' + (i + 2), '· ' + r.text, { dimColor: true }))
+    }
+    if (latest) {
+      t('u0', ' ')
+      t('u1', `helps ${latest} is out; you have ${VERSION}.`, { weight: 'semibold' })
+      t('u2', 'Installed from claude.ai: Customize → Plugins → helps → Update, then start a new session.', { dimColor: true })
+      t('u3', 'Installed with /plugin: /plugin → Installed → helps → Update now, then /reload-plugins.', { dimColor: true })
+      t('u4', 'To get updates by themselves: /plugin → Marketplaces → uaskpro-helps → Enable auto-update.', { dimColor: true })
     }
     t('legend', '🟢 on track · 🟡 needs a look · 🔴 needs you · 🚨 emergency · Esc to close', { dimColor: true })
     return Box({ flexDirection: 'column', rowGap: 0, children: rows })

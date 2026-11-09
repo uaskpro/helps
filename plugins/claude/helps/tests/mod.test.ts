@@ -30,7 +30,7 @@ function disk(files: Record<string, string>, mtimeMs = DAY) {
   return { fs, dirs }
 }
 
-async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number; cwd?: string; context?: number; drift?: string } = {}) {
+async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number; cwd?: string; context?: number; drift?: string; published?: string } = {}) {
   const cwd = opts.cwd || '/work/SHOP'
   const clock = mock.clock(on)
   const d = disk(files, opts.mtimeMs)
@@ -45,6 +45,7 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   on('model.complete', () => ({ value: { isAnswered: true, text: opts.drift ?? '{"on_track": true, "reason": "fine"}', usage: {} } }))
   on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
   on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ version: opts.published ?? '0.0.1' }) } }))
   on('tool.call', { tool: 'Bash' }, ($: any, e: any) => (/fail/.test(e.command)
     ? { isError: true, result: 'exit 1', text: 'exit 1' }
     : { result: { stdout: 'ok', stderr: '' } }))
@@ -235,4 +236,13 @@ test('an alert line blinks', async ($, on) => {
   await clock.advance(500)
   const second = await ui.find({ type: 'Text', text: / 🚨 EMERGENCY / })
   expect(Boolean(first.props.inverse)).not.toBe(Boolean(second.props.inverse))
+})
+
+test('a newer published version shows beside the lamp, with how to update in Details', async ($, on) => {
+  const { status, toasts } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS }, { published: '99.0.0' })
+  expect(last(status)).toMatch(/main: helps · update 99\.0\.0 available$/)
+  expect(toasts.some((t) => t.includes('helps 99.0.0 is out'))).toBe(true)
+  const pane = await $.ui.mount({ plugin: 'helps', surface: 'desktop', component: 'Pane', requestId: 'helps-lamp',
+    viewport: { columns: 100, rows: 40 }, props: {} } as any)
+  expect(await pane.find({ type: 'Text', text: /Customize → Plugins → helps → Update/ })).toBeDefined()
 })

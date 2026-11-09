@@ -21,6 +21,19 @@ export const SESSION_DEFAULTS = {
   drift_check: true,
   drift_every_turns: 3,
   drift_every_min: 10,
+  update_check: true,
+}
+
+// "0.6.1" is newer than "0.6.0"; anything unparsable is not newer.
+export function isNewer(candidate, current) {
+  const parse = (v) => (/^\d+(\.\d+)*$/.test(String(v || '')) ? String(v).split('.').map(Number) : null)
+  const a = parse(candidate)
+  const b = parse(current)
+  if (!a || !b) return false
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0)
+  }
+  return false
 }
 
 export function sessionConfig(raw) {

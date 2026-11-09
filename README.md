@@ -69,6 +69,11 @@ thing's own state (ideas saved today, decisions waiting, other projects touched)
 Thresholds live in `config.json`, under `"session"`, for example
 `{"session": {"without_you_red_min": 180, "drift_check": false}}`.
 
+When a newer helps is published, the lamp says "update … available" and Details shows how to
+update. To know that, helps reads its own version number from GitHub
+(`raw.githubusercontent.com`) at most once every 6 hours; nothing about you or your work is sent.
+Turn it off with `{"session": {"update_check": false}}`.
+
 Run it by hand: `/helps:setup`, `/helps:focus`, `/helps:idea`, `/helps:decide`, `/helps:review`
 (in Codex: `$setup` and so on), or just ask: "what is the main thing now?", "let's go through
 the decisions".
