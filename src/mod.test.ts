@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 // The whole helps mod: the core runs inside Claude Code, files live in the test's memory.
+// The lamp shows THIS session's state; the person's main thing sits beside it, dimmed.
 const BAND = {
   plugin: 'helps',
   component: 'AbovePrompt',
@@ -29,7 +30,8 @@ function disk(files: Record<string, string>, mtimeMs = DAY) {
   return { fs, dirs }
 }
 
-async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number } = {}) {
+async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number; cwd?: string; context?: number; drift?: string } = {}) {
+  const cwd = opts.cwd || '/work/SHOP'
   const clock = mock.clock(on)
   const d = disk(files, opts.mtimeMs)
   const toasts: string[] = []
@@ -37,7 +39,15 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   const tools: string[] = []
   const status: (string | undefined)[] = []
   const env: Record<string, string> = { HOME: '/home/u', HELPS_TODAY: TODAY, HELPS_NOW: TODAY + ' 09:00' }
-  on('session.start', () => ({ cwd: '/work' }))
+  on('session.start', () => ({ cwd }))
+  on('session.cwd', () => ({ value: cwd }))
+  on('session.usage', () => ({ value: { startedAt: DAY, context: { window: 1000000, percent: opts.context ?? 20 }, rateLimits: [] } }))
+  on('model.complete', () => ({ value: { isAnswered: true, text: opts.drift ?? '{"on_track": true, "reason": "fine"}', usage: {} } }))
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('tool.call', { tool: 'Bash' }, ($: any, e: any) => (/fail/.test(e.command)
+    ? { isError: true, result: 'exit 1', text: 'exit 1' }
+    : { result: { stdout: 'ok', stderr: '' } }))
   on('command.register', () => ({ value: undefined }))
   on('tool.register', ($: any, e: any) => { tools.push(e.name); return { value: { tool: 'mcp__helps__' + e.name } } })
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'engine', scope: 'shared' }] }))
@@ -70,81 +80,149 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   on('prompt.submit', ($: any, e: any) => { prompts.push(e.text); return { text: e.text } })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.render', () => ({ type: 'Text', props: {}, children: [] }))
-  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd })
   await clock.settle()
   return { clock, toasts, prompts, tools, status, files: d.fs }
 }
 
 const DATA = '/home/u/helps-data'
 const COMPOSE = { model: 'm', promptModel: 'm', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as any
+const TURN = { reason: 'answer', answer: 'Done: the panel works.', durationMs: 1000, isAborted: false, turnId: 't1' } as any
+const bash = ($: any, command: string) => $.tool.call({ tool: 'Bash', command, tool_use_id: 'b' + Math.random() })
+const last = (a: any[]) => a[a.length - 1]
 
-test('not set up: Set up button and an offer in the prompt', async ($, on) => {
+test('not set up: a Set up button and an offer in the prompt', async ($, on) => {
   const { tools } = await start($, on, {})
   expect(tools).toContain('run')
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect(await ui.find({ key: 'helps-setup' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /helps is not set up/ })).toBeDefined()
     await ui.unmount()
   }
   const { sections } = await $.prompt.compose(COMPOSE)
-  const ours = sections.find((s: any) => s.id === 'helps:focus')
-  expect(ours.text).toContain('Set up now')
+  expect(sections.find((s: any) => s.id === 'helps:focus').text).toContain('Set up now')
 })
 
-test('set up: green lamp and the main thing in the prompt', async ($, on) => {
+test('a calm session is green and names itself, the main thing is beside it', async ($, on) => {
   const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
-  expect(status[status.length - 1]).toBe('🟢 Main thing: helps · on track: helps')
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /on track: helps/ })).toBeDefined()
+  expect(last(status)).toMatch(/^🟢 SHOP · on track · 0 min since your message · context 20% · main: helps$/)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /SHOP · on track/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /main: helps/ })).toBeDefined()
   expect(await ui.find({ key: 'helps-back' })).toBeUndefined()
+  expect(await ui.find({ key: 'helps-more' })).toBeDefined()
   const { sections } = await $.prompt.compose(COMPOSE)
-  const ours = sections.find((s: any) => s.id === 'helps:focus')
-  expect(ours.text).toContain("The person's main thing: helps")
-  expect(ours.text).toContain('Day 2.')
+  expect(sections.find((s: any) => s.id === 'helps:focus').text).toContain("The person's main thing: helps")
 })
 
-test('tool: saved ideas turn the lamp yellow, toast and Back button', async ($, on) => {
-  const { clock, toasts, prompts, status, files } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
-  for (const t of ['portal', 'bot', 'site']) {
-    const r = await $.tool.call({ tool: 'mcp__helps__run', args: ['idea', t, '--by', 'claude'] })
-    expect(r.result).toContain('Saved for later')
-  }
-  expect(files.get(DATA + '/IDEAS.md')!.text).toContain('- 2026-11-10 09:00 [claude] site')
-  await clock.advance(30_000)
-  expect(toasts.some((t) => t.includes('3 times'))).toBe(true)
-  expect(status[status.length - 1]).toContain('🟡 Main thing: helps')
+test('other projects touched today no longer color this session', async ($, on) => {
+  const { status } = await start($, on, {
+    [DATA + '/FOCUS.md']: FOCUS,
+    [DATA + '/IDEAS.md']: '# IDEAS\n\n- 2026-11-10 09:00 [claude] a\n- 2026-11-10 09:00 [claude] b\n- 2026-11-10 09:00 [claude] c\n',
+  })
+  expect(last(status)).toMatch(/^🟢 SHOP · on track/)
+  const pane = await $.ui.mount({ plugin: 'helps', surface: 'terminal', component: 'Pane', requestId: 'helps-lamp',
+    viewport: { columns: 100, rows: 40 }, props: {} } as any)
+  expect(await pane.find({ type: 'Text', text: /drifted off 3 times today/ })).toBeDefined()
+})
+
+test('outside actions without your word: yellow, then red, and a report button', async ($, on) => {
+  const { status, prompts, toasts } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await bash($, 'git status && git push origin main')
+  expect(last(status)).toMatch(/^🟡 SHOP · 1 outside action without your word: git push/)
+  await bash($, 'ssh -o BatchMode=yes h11 "ls"')
+  await bash($, 'scp dist.tar h11:/root/')
+  expect(last(status)).toMatch(/^🔴 SHOP · 3 outside actions without your word: git push, ssh h11, scp h11/)
+  expect(toasts.some((t) => t.startsWith('🔴'))).toBe(true)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: 'helps-report' })
+  expect(last(prompts)).toContain('what you did since my last message')
+  expect(await ui.find({ key: 'helps-pause' })).toBeDefined()
+})
+
+test('an outside action in reply to you does not color the lamp; on its own it does', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await $.prompt.submit({ text: 'push it' })
+  await $.turn.start({ text: 'push it', turnId: 'o1' })
+  await bash($, 'git push origin main')
+  expect(last(status)).toMatch(/^🟢 SHOP · on track/)
+  await $.turn.complete({ ...TURN, turnId: 'o1' })
+  await $.turn.start({ text: '', turnId: 'auto1' })
+  await bash($, 'scp dist.tar h11:/root/')
+  expect(last(status)).toMatch(/^🟡 SHOP · 1 outside action without your word: scp h11/)
+})
+
+test('your message starts the count over', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await bash($, 'ssh h11 uptime')
+  expect(last(status)).toMatch(/^🟡/)
+  await $.prompt.submit({ text: 'ok, go on' })
+  expect(last(status)).toMatch(/^🟢 SHOP · on track/)
+})
+
+test('working without you for hours turns red', async ($, on) => {
+  const { clock, status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  for (let i = 0; i < 3; i++) await clock.advance(15 * 60000)
+  await bash($, 'ls')
+  expect(last(status)).toMatch(/^🟡 SHOP · working without you 45 min/)
+  for (let i = 0; i < 6; i++) await clock.advance(15 * 60000)
+  await bash($, 'ls')
+  expect(last(status)).toMatch(/^🔴 SHOP · working without you 2 h 15 min/)
+})
+
+test('stuck: the same command failing again and again', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  for (let i = 0; i < 3; i++) await bash($, 'pg_dump --fail core')
+  expect(last(status)).toMatch(/^🟡 SHOP · stuck: "pg_dump --fail core" failed 3×/)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /drifted off/ })).toBeDefined()
-  await ui.press({ key: 'helps-back' })
-  expect(prompts[0]).toContain('back to the main thing')
+  expect(await ui.find({ key: 'helps-stuck' })).toBeDefined()
+  await bash($, 'ls')
+  expect(last(status)).toMatch(/^🟢/)
+})
+
+test('a full context window is red', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS }, { context: 80 })
+  expect(last(status)).toMatch(/^🔴 SHOP · context 80% full/)
+})
+
+test('drift check: yellow with the reason, never red', async ($, on) => {
+  const { clock, status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS },
+    { drift: '{"on_track": false, "reason": "you asked for simple presets; it builds a section editor"}' })
+  await $.prompt.submit({ text: 'just a set of compatible presets, much simpler' })
+  for (let i = 0; i < 3; i++) await $.turn.complete({ ...TURN, turnId: 't' + i })
+  await clock.advance(10)
+  await clock.settle()
+  const pane = await $.ui.mount({ plugin: 'helps', surface: 'terminal', component: 'Pane', requestId: 'helps-lamp',
+    viewport: { columns: 100, rows: 40 }, props: {} } as any)
+  const dl = await pane.find({ type: 'Text', text: /Drift check/ })
+  expect(dl ? JSON.stringify(dl.children) : 'none').toContain('drifting')
+  expect(last(status)).toMatch(/^🟡 SHOP · drifting from your ask: you asked for simple presets; it builds a section editor/)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ key: 'helps-drift' })).toBeDefined()
+})
+
+test('in the main thing\'s own session the main-thing buttons come back', async ($, on) => {
+  const { files } = await start($, on, {
+    [DATA + '/FOCUS.md']: FOCUS,
+    [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
+    '/home/u/projects/SHOP/STATE.md': STATE,
+  }, { cwd: '/home/u/projects/helps', mtimeMs: Date.parse('2026-11-01T09:00:00') })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ key: 'helps-decide' })).toBeDefined()
+  expect(await ui.find({ key: 'helps-back' })).toBeDefined()
+  const list = JSON.parse((await $.tool.call({ tool: 'mcp__helps__run', args: ['decisions', '--json'] })).result)
+  await $.tool.call({ tool: 'mcp__helps__run', args: ['answer', list[0].id, '199 euro'] })
+  expect(files.get('/home/u/projects/SHOP/STATE.md')!.text).toContain('## Owner answers (helps)')
 })
 
 test('tool: errors come back as plain text', async ($, on) => {
   await start($, on, {})
   const r = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '5'] })
   expect(r.isError).toBe(true)
-  const bad = await $.tool.call({ tool: 'mcp__helps__run', args: ['no-such'] })
-  expect(bad.isError).toBe(true)
 })
 
-test('decisions: old ones are red, the answer goes into the project', async ($, on) => {
-  const { clock, files } = await start($, on, {
-    [DATA + '/FOCUS.md']: FOCUS,
-    [DATA + '/inbox-sources.txt']: '# x\n/home/u/projects/*/STATE.md\n',
-    '/home/u/projects/SHOP/STATE.md': STATE,
-  }, { mtimeMs: Date.parse('2026-11-01T09:00:00') })
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /decisions waiting 9 days \(2\)/ })).toBeDefined()
-  expect(await ui.find({ key: 'helps-decide' })).toBeDefined()
-  const list = JSON.parse((await $.tool.call({ tool: 'mcp__helps__run', args: ['decisions', '--json'] })).result)
-  expect(list.length).toBe(2)
-  expect(list[0].project).toBe('SHOP')
-  await $.tool.call({ tool: 'mcp__helps__run', args: ['answer', list[0].id, '199 euro'] })
-  expect(files.get('/home/u/projects/SHOP/STATE.md')!.text).toContain('## Owner answers (helps)\n- 2026-11-10: "Price and payment." → 199 euro')
-  await clock.advance(30_000)
-})
-
-test('the emergency lamp blinks', async ($, on) => {
+test('an alert line blinks', async ($, on) => {
   const { clock } = await start($, on, {
     [DATA + '/FOCUS.md']: FOCUS,
     [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',

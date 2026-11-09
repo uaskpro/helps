@@ -269,7 +269,7 @@ test('manifests, hooks and skills', () => {
     const hooks = JSON.parse(fs.readFileSync(path.join(dir, 'hooks', 'hooks.json'), 'utf8'))
     if (agent === 'claude') {
       assert.deepEqual(hooks, { modules: ['./register.js'] })
-      for (const f of ['register.js', 'core.js']) assert.ok(fs.existsSync(path.join(dir, 'hooks', f)))
+      for (const f of ['register.js', 'core.js', 'session.js']) assert.ok(fs.existsSync(path.join(dir, 'hooks', f)))
     } else {
       assert.match(hooks.hooks.SessionStart[0].hooks[0].command, new RegExp(`cli\\.mjs" context --agent ${agent}`))
       assert.equal(fs.readFileSync(path.join(dir, 'core', 'core.js'), 'utf8'),
@@ -298,4 +298,43 @@ test('package.json and the core agree on the version', async () => {
   const { VERSION } = await import('../src/core.js')
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
   assert.equal(pkg.version, VERSION)
+})
+
+// ----------------------------------------------------------- this session
+
+test('outside actions: servers, pushes, merges, deploys; not local work', async () => {
+  const { outsideAction } = await import('../src/session.js')
+  const cases = {
+    'ssh -i ~/.ssh/k -o BatchMode=yes root@h11 uptime': 'ssh h11',
+    'scp -r dist/ h11:/root/x/': 'scp h11',
+    'git -C /x push origin main': 'git push',
+    'git merge --no-ff task/a': 'git merge',
+    'bin/merge-task task/x': 'merge-task',
+    'bash docs/ops/provision-builder.sh': 'provision-builder.sh',
+    'curl -s -X POST https://dev.example.com/api/v1/deploy': 'API write dev.example.com',
+  }
+  for (const [cmd, want] of Object.entries(cases)) assert.equal(outsideAction(cmd), want, cmd)
+  for (const cmd of ['rsync -a src/ dst/', 'git status', 'ssh -T git@github.com', 'curl -s https://example.com',
+    'curl -X POST http://localhost:8080/x', 'npm test', 'ls | grep ssh', './tools/check.sh']) {
+    assert.equal(outsideAction(cmd), null, cmd)
+  }
+})
+
+test('the session lamp: thresholds, worst first, drift never red', async () => {
+  const { assess, newSessionState, ownerSpoke, sessionConfig, headline } = await import('../src/session.js')
+  const cfg = sessionConfig({ context_red: 70, nonsense: 1 })
+  assert.equal(cfg.context_red, 70)
+  const s = newSessionState(0)
+  assert.equal(assess(s, 0, cfg).level, 'green')
+  s.outside.push({ label: 'ssh h11', at: 1 }, { label: 'ssh h11', at: 2 }, { label: 'git push', at: 3 }, { label: 'scp h11', at: 4, asked: true })
+  s.lastActivityAt = 40 * 60000
+  let v = assess(s, s.lastActivityAt, cfg)
+  assert.equal(v.level, 'red')
+  assert.deepEqual(v.reasons.map((r) => r.kind), ['outside', 'alone'])
+  assert.match(headline('SHOP', v, s, s.lastActivityAt), /^SHOP · 3 outside actions without your word: ssh h11, git push · working without you 40 min/)
+  ownerSpoke(s, 'ok', s.lastActivityAt)
+  s.drift = { onTrack: false, reason: 'builds an editor' }
+  v = assess(s, s.lastActivityAt, cfg)
+  assert.equal(v.level, 'yellow')
+  assert.equal(assess(s, 0, cfg, ['SHOP: site down']).level, 'siren')
 })

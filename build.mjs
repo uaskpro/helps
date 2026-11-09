@@ -83,6 +83,7 @@ function buildClaude(out) {
   dump(path.join(dest, 'hooks', 'hooks.json'), { modules: ['./register.js'] })
   copy('register.js', path.join(dest, 'hooks', 'register.js'))
   copy('core.js', path.join(dest, 'hooks', 'core.js'))
+  copy('session.js', path.join(dest, 'hooks', 'session.js'))
   copy('mod.test.ts', path.join(dest, 'tests', 'mod.test.ts')) // claude plugin test
 }
 

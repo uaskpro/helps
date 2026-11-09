@@ -42,19 +42,32 @@ On first use the assistant asks three questions with buttons: what the main thin
 - once a day, if questions piled up in your projects: "Go through decisions (about 3 min)?",
   one at a time, with buttons; each answer is written into the project itself;
 - once a week: "Look at saved items?" to keep, drop or make one the main thing;
-- a lamp: 🟢 on track, 🟡 starting to drift, 🔴 going the wrong way, 🚨 emergency (blinks).
-  In Claude Code it sits above the prompt in the terminal and the desktop app, with the reason
-  and the buttons "Back to the main thing", "Go through decisions" and "Details", and in the
-  status line on every screen, the Claude mobile app included. Codex and Gemini show the same
-  color as a line at the start of the session.
+- a lamp in every Claude Code session showing how **that session** is doing: 🟢 on track,
+  🟡 needs a look, 🔴 needs you, 🚨 emergency (blinks). It sits above the prompt in the terminal
+  and the desktop app (local and Remote Control sessions), with the reason, buttons that fit it
+  and "Details", and in the status line. Your main thing is shown beside it, dimmed.
+  Codex and Gemini show the main thing's color as a line at the start of the session.
 
-The lamp is worked out from what helps already knows:
+What the lamp watches in a session:
 
-- 🟡 drifted off 3+ times today, decisions waiting over a day, 2 other projects touched today,
-  the main thing quiet for 2 days;
-- 🔴 drifted off 6+ times today, decisions waiting 3+ days, 3+ other projects touched today,
-  the main thing quiet for 3+ days;
-- 🚨 a line in any project's state file starts with `🚨`, `URGENT:` or `ALERT:`.
+| Signal | 🟡 | 🔴 |
+|---|---|---|
+| Working without you: time since your last message while the session keeps going on its own | 30 min | 2 h |
+| Outside actions without your word: ssh/scp/rsync to other machines, `git push`, merges, deploy, provision or release scripts, API writes — done in turns the session started itself, not in its reply to you | 1 | 3 |
+| Stuck: the same command failing again and again, or one command running for 10+ min | 3 fails | 6 fails |
+| Context window | 50% | 75% |
+| Drifting from your ask: every few turns a small model compares your last messages with what the session does (yellow at most, always with the reason) | ✓ | — |
+
+🚨 means a line in a project's state file starts with `🚨`, `URGENT:` or `ALERT:`.
+
+The buttons fit the reason: "What did you do without me?", "What's wrong?", "Check with me",
+"Pause after this step". Each one sends that request into the session as if you typed it. In the
+session that works on your main thing, "Back to the main thing" and "Go through decisions" are
+there too. "Details" lists every signal, the outside actions with their times, and your main
+thing's own state (ideas saved today, decisions waiting, other projects touched).
+
+Thresholds live in `config.json`, under `"session"`, for example
+`{"session": {"without_you_red_min": 180, "drift_check": false}}`.
 
 Run it by hand: `/helps:setup`, `/helps:focus`, `/helps:idea`, `/helps:decide`, `/helps:review`
 (in Codex: `$setup` and so on), or just ask: "what is the main thing now?", "let's go through
