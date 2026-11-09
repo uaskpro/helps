@@ -54,7 +54,7 @@ What the lamp watches in a session:
 |---|---|---|
 | Working without you: time since your last message while the session keeps going on its own | 30 min | 2 h |
 | Outside actions without your word: ssh/scp/rsync to other machines, `git push`, merges, deploy, provision or release scripts, API writes — done in turns the session started itself, not in its reply to you | 1 | 3 |
-| Stuck: the same command failing again and again, or one command running for 10+ min | 3 fails | 6 fails |
+| Stuck: the same command failing again and again, or one command running for 5+ min | 3 fails | 6 fails |
 | Context window | 50% | 75% |
 | Drifting from your ask: every few turns a small model compares your last messages with what the session does (yellow at most, always with the reason) | ✓ | — |
 

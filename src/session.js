@@ -15,7 +15,7 @@ export const SESSION_DEFAULTS = {
   outside_yellow: 1,
   outside_red: 3,
   stuck_repeats: 3,
-  long_command_min: 10,
+  long_command_min: 5,
   context_yellow: 50,
   context_red: 75,
   drift_check: true,
@@ -49,59 +49,180 @@ export function sessionConfig(raw) {
 const LEVELS = ['green', 'yellow', 'red', 'siren']
 export const higher = (a, b) => (LEVELS.indexOf(b) > LEVELS.indexOf(a) ? b : a)
 
-// Options of ssh, scp and rsync that take a value, so the value is not taken for the host.
-const ARG_OPTS = new Set(['-i', '-o', '-p', '-P', '-F', '-J', '-l', '-e', '-b', '-c', '-D', '-L', '-R', '-W', '-S', '-m', '--rsh'])
+// ---------------------------------------------------------------- shell parsing
 
-function tokens(segment) {
-  return segment.match(/"[^"]*"|'[^']*'|\S+/g) || []
+// Heredoc bodies are data, not commands: `git commit -m "$(cat <<'EOF' … EOF)"`.
+function dropHeredocs(command) {
+  return command.replace(/<<-?\s*(['"]?)([A-Za-z_]\w*)\1([^\n]*)\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g, '<<$1$2$1$3')
 }
 
-function hostOf(kind, toks) {
-  for (let i = 0; i < toks.length; i++) {
-    const t = toks[i]
+// Split into simple commands on ; && || | & and newlines, outside quotes and $( … ).
+export function splitCommands(command) {
+  const text = dropHeredocs(String(command || ''))
+  const out = []
+  let cur = ''
+  let quote = null
+  let depth = 0
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quote) {
+      cur += c
+      if (c === '\\' && quote === '"' && i + 1 < text.length) { cur += text[++i]; continue }
+      if (c === quote) quote = null
+      continue
+    }
+    if (c === '\\' && i + 1 < text.length) { cur += c + text[++i]; continue }
+    if (c === "'" || c === '"' || c === '`') { quote = c; cur += c; continue }
+    if (c === '$' && text[i + 1] === '(') { depth++; cur += '$('; i++; continue }
+    if (c === ')' && depth > 0) { depth--; cur += c; continue }
+    if (depth === 0 && (c === ';' || c === '\n' || c === '&' || c === '|')) {
+      if ((c === '&' || c === '|') && text[i + 1] === c) i++
+      out.push(cur)
+      cur = ''
+      continue
+    }
+    cur += c
+  }
+  out.push(cur)
+  return out.map((x) => x.trim().replace(/^[({!\s]+|[)}\s]+$/g, '').trim()).filter(Boolean)
+}
+
+// Words of one simple command, quotes removed.
+export function words(segment) {
+  const out = []
+  let cur = ''
+  let quote = null
+  let has = false
+  for (let i = 0; i < segment.length; i++) {
+    const c = segment[i]
+    if (quote) {
+      if (c === quote) { quote = null; continue }
+      if (c === '\\' && quote === '"' && i + 1 < segment.length) { cur += segment[++i]; continue }
+      cur += c
+      continue
+    }
+    if (c === "'" || c === '"') { quote = c; has = true; continue }
+    if (c === '\\' && i + 1 < segment.length) { cur += segment[++i]; has = true; continue }
+    if (/\s/.test(c)) { if (has || cur) out.push(cur); cur = ''; has = false; continue }
+    cur += c
+    has = true
+  }
+  if (has || cur) out.push(cur)
+  return out
+}
+
+const KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', 'time', '!'])
+const WRAPPERS = { sudo: ['-u', '-g', '-h', '-p', '-C', '-D', '-U'], doas: ['-u'], env: ['-u', '-C', '-S'], nohup: [],
+  timeout: ['-s', '-k', '--signal', '--kill-after'], nice: ['-n'], ionice: ['-c', '-n'], stdbuf: [], command: [], exec: [],
+  xargs: ['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a'], watch: ['-n'], caffeinate: [] }
+
+// The command words with prefixes like VAR=x, sudo, env, timeout 30, nohup removed.
+function core(ws) {
+  let i = 0
+  for (;;) {
+    if (i >= ws.length) return []
+    const w = ws[i]
+    if (KEYWORDS.has(w) || /^[A-Za-z_]\w*=/.test(w)) { i++; continue }
+    const name = w.replace(/^.*\//, '')
+    if (name in WRAPPERS) {
+      i++
+      while (i < ws.length && ws[i].startsWith('-')) { if (WRAPPERS[name].includes(ws[i])) i++; i++ }
+      if (name === 'timeout' && i < ws.length && /^\d/.test(ws[i])) i++
+      continue
+    }
+    return ws.slice(i)
+  }
+}
+
+// Options of ssh, scp, rsync and sftp that take a value, so the value is not taken for the host.
+const ARG_OPTS = new Set(['-i', '-o', '-p', '-P', '-F', '-J', '-l', '-e', '-b', '-c', '-D', '-L', '-R', '-W', '-S', '-m', '--rsh'])
+
+function remote(kind, args) {
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i]
     if (t.startsWith('-')) { if (ARG_OPTS.has(t)) i++; continue }
-    if (kind === 'ssh') return t.replace(/^.*@/, '')
+    if (kind === 'ssh' || kind === 'sftp') {
+      const user = t.includes('@') ? t.split('@')[0] : ''
+      const host = t.replace(/^.*@/, '').replace(/:.*$/, '')
+      if (user === 'git' || ['localhost', '127.0.0.1', '::1'].includes(host)) return null
+      return host
+    }
     const m = /^(?:[\w.-]+@)?([\w.-]+):/.exec(t)
     if (m && !/^[A-Za-z]$/.test(m[1])) return m[1]
   }
   return null
 }
 
+const SCRIPT = /(^|[-_.])(merge-task|deploy|provision|release|publish|push)([-_.]|$)/i
+const LOCAL = /\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:\/|$)/
+const base = (p) => String(p || '').replace(/^.*\//, '')
+
+function classify(ws, found, depth) {
+  const w = core(ws)
+  if (!w.length) return
+  const cmd = base(w[0])
+  const a = w.slice(1)
+  const first = a.find((t) => !t.startsWith('-'))
+  if (cmd === 'ssh' || cmd === 'scp' || cmd === 'rsync' || cmd === 'sftp') {
+    const host = remote(cmd, a)
+    if (host) found.add(`${cmd} ${host}`)
+  } else if (cmd === 'git') {
+    let i = 0
+    while (i < a.length && a[i].startsWith('-')) { if (['-C', '-c', '--git-dir', '--work-tree', '--namespace'].includes(a[i])) i++; i++ }
+    const sub = a[i]
+    const rest = a.slice(i + 1)
+    if (sub === 'push' && !rest.some((t) => t === '--dry-run' || t === '-n')) found.add('git push')
+    else if (sub === 'merge' && !rest.some((t) => ['--abort', '--quit', '--continue'].includes(t))) found.add('git merge')
+  } else if (cmd === 'gh') {
+    if (a[0] === 'pr' && a[1] === 'merge') found.add('gh pr merge')
+    else if (a[0] === 'release' && a[1] === 'create') found.add('gh release')
+    else if (a[0] === 'api' && a.some((t, i) => (t === '-X' || t === '--method') && /^(POST|PUT|PATCH|DELETE)$/i.test(a[i + 1] || ''))) found.add('gh api write')
+  } else if (cmd === 'docker' || cmd === 'podman') {
+    if (first === 'push' || (first === 'compose' && a.includes('push'))) found.add(`${cmd} push`)
+  } else if (cmd === 'kubectl' || cmd === 'oc') {
+    if (['apply', 'delete', 'patch', 'replace', 'scale', 'rollout', 'set', 'create'].includes(first)) found.add(`kubectl ${first}`)
+  } else if (cmd === 'helm') {
+    if (['install', 'upgrade', 'uninstall', 'rollback'].includes(first)) found.add(`helm ${first}`)
+  } else if (cmd === 'terraform' || cmd === 'tofu') {
+    if (first === 'apply' || first === 'destroy') found.add(`${cmd} ${first}`)
+  } else if (['wrangler', 'netlify', 'flyctl', 'fly', 'firebase', 'vercel', 'surge'].includes(cmd)) {
+    if (cmd === 'vercel' ? (first === undefined || first === 'deploy' || a.includes('--prod')) : ['deploy', 'publish'].includes(first)) found.add(`${cmd} deploy`)
+  } else if (cmd === 'npm' || cmd === 'pnpm' || cmd === 'yarn' || cmd === 'bun') {
+    if (first === 'publish') found.add(`${cmd} publish`)
+    else {
+      const script = first === 'run' || first === 'run-script' ? a[a.indexOf(first) + 1] : cmd === 'npm' ? null : first
+      if (script && SCRIPT.test(script)) found.add(`${cmd} run ${script}`)
+    }
+  } else if (cmd === 'npx' || cmd === 'bunx' || cmd === 'pnpx') {
+    if (depth < 3) classify(a.filter((t, i) => !(t.startsWith('-') && i === 0)), found, depth + 1)
+  } else if (cmd === 'make') {
+    const target = a.find((t) => !t.startsWith('-') && !t.includes('='))
+    if (target && SCRIPT.test(target)) found.add(`make ${target}`)
+  } else if (cmd === 'curl') {
+    const method = a.find((t, i) => (a[i - 1] === '-X' || a[i - 1] === '--request')) || ''
+    const writes = /^(POST|PUT|PATCH|DELETE)$/i.test(method) ||
+      a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--data(-\w+)?=/.test(t))
+    const url = a.find((t) => /^https?:\/\//.test(t))
+    if (writes && url && !LOCAL.test(url)) found.add(`API write ${url.replace(/^https?:\/\/([^/:]+).*$/, '$1')}`)
+  } else if (cmd === 'wget') {
+    const url = a.find((t) => /^https?:\/\//.test(t))
+    if (url && !LOCAL.test(url) && a.some((t) => /^--(post-data|post-file|method=(POST|PUT|PATCH|DELETE))/i.test(t))) found.add(`API write ${url.replace(/^https?:\/\/([^/:]+).*$/, '$1')}`)
+  } else if (['bash', 'sh', 'zsh', 'dash'].includes(cmd) && a.includes('-c') && depth < 3) {
+    const inner = a[a.indexOf('-c') + 1]
+    if (inner) for (const seg of splitCommands(inner)) classify(words(seg), found, depth + 1)
+  } else if (['bash', 'sh', 'zsh', 'node', 'python', 'python3', 'php', 'ruby', 'perl', 'deno', 'bun', 'tsx'].includes(cmd)) {
+    const script = a.find((t) => !t.startsWith('-') && t !== 'run')
+    if (script && SCRIPT.test(base(script))) found.add(base(script))
+  } else if (SCRIPT.test(cmd)) {
+    found.add(cmd)
+  }
+}
+
 // What a shell command does outside this machine and this repository, or null.
 export function outsideAction(command) {
-  const found = []
-  for (const segment of String(command || '').split(/&&|\|\||;|\||\n/)) {
-    const seg = segment.trim().replace(/^(?:sudo\s+|env\s+(?:\S+=\S*\s+)*|\S+=\S*\s+)+/, '')
-    const toks = tokens(seg)
-    if (!toks.length) continue
-    const cmd = toks[0].replace(/^.*\//, '')
-    const rest = toks.slice(1)
-    if (cmd === 'ssh') {
-      const host = hostOf('ssh', rest)
-      if (host && host !== 'localhost' && !/^git@/.test(rest.find((t) => !t.startsWith('-')) || '')) found.push(`ssh ${host}`)
-    } else if (cmd === 'scp' || cmd === 'rsync' || cmd === 'sftp') {
-      const host = hostOf(cmd, rest)
-      if (host) found.push(`${cmd} ${host}`)
-    } else if (cmd === 'git') {
-      const sub = rest.filter((t, i) => !(t.startsWith('-') || (i > 0 && rest[i - 1] === '-C')))[0]
-      if (sub === 'push') found.push('git push')
-      else if (sub === 'merge') found.push('git merge')
-    } else if (/(^|[-_./])(merge-task|deploy|provision|release|publish|push)([-_./]|$)/i.test(toks[0])) {
-      found.push(cmd)
-    } else if ((cmd === 'npm' || cmd === 'pnpm' || cmd === 'yarn') && rest[0] === 'publish') {
-      found.push(`${cmd} publish`)
-    } else if (cmd === 'gh' && rest[0] === 'release' && rest[1] === 'create') {
-      found.push('gh release')
-    } else if (cmd === 'curl' && /(?:^|\s)(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b/i.test(seg) &&
-               !/\/\/(?:localhost|127\.0\.0\.1)[:/]/.test(seg)) {
-      const url = /https?:\/\/([\w.-]+)/.exec(seg)
-      found.push(`API write ${url ? url[1] : ''}`.trim())
-    } else if (cmd === 'bash' || cmd === 'sh') {
-      const script = rest.find((t) => !t.startsWith('-'))
-      if (script && /(^|[-_./])(merge-task|deploy|provision|release|publish|push)([-_./]|$)/i.test(script)) found.push(script.replace(/^.*\//, ''))
-    }
-  }
-  return found.length ? [...new Set(found)].join(', ') : null
+  const found = new Set()
+  for (const seg of splitCommands(command)) classify(words(seg), found, 0)
+  return found.size ? [...found].join(', ') : null
 }
 
 export function duration(ms) {
@@ -126,6 +247,8 @@ export function newSessionState(now) {
     asks: [], // the owner's last messages, newest last
     outside: [], // [{ label, at, asked }] since the owner's last message; asked = done in the turn the owner started
     inOwnerTurn: false, // the main loop is answering the owner right now
+    awaitingOwnerTurn: false, // the owner spoke while idle: the next main-loop turn answers them
+    gen: 0, // bumped when the owner speaks, so a late drift verdict about older work is dropped
     fail: { key: null, count: 0, cmd: '' },
     running: new Map(), // tool_use_id → { cmd, start }
     recent: [], // the session's last commands, for the drift check
@@ -137,12 +260,21 @@ export function newSessionState(now) {
   }
 }
 
+// Prompt origins that are the person at the keyboard (or phone), not a notification, a peer, a schedule or a plugin.
+const OWNER_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'slack-ping', 'auto-continuation'])
+
+export function isOwnerPrompt(e) {
+  if (e.command) return false // a slash command answers no request about the work
+  if (e.origin && typeof e.origin.kind === 'string') return OWNER_ORIGINS.has(e.origin.kind)
+  return !e.isMeta // an engine that does not say where a prompt came from
+}
+
 export function ownerSpoke(s, text, now) {
   s.lastOwnerAt = now
   s.lastActivityAt = now
   if (text) s.asks = s.asks.concat([String(text).slice(0, 2000)]).slice(-3)
   s.outside = []
-  s.inOwnerTurn = true
+  s.gen = (s.gen || 0) + 1
   s.fail = { key: null, count: 0, cmd: '' }
   s.drift = null
   s.turnsSinceDrift = 0

@@ -10,13 +10,14 @@
 import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES, VERSION } from './core.js'
 import {
   sessionConfig, newSessionState, ownerSpoke, outsideAction, assess, headline, duration,
-  DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer,
+  DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, isOwnerPrompt,
 } from './session.js'
 
 const PANE = 'helps-lamp'
 const POLL_MS = 30_000
 const BLINK_MS = 500
-const DRIFT_MODEL = 'claude-haiku-5-5'
+const DRIFT_MODEL = 'haiku' // an alias the engine resolves to its current small model
+const DRIFT_TIMEOUT_MS = 30_000
 // Once every 6 hours helps reads its own published version number; nothing about the person is sent.
 const VERSION_URL = 'https://raw.githubusercontent.com/uaskpro/helps/main/plugins/claude/helps/.claude-plugin/plugin.json'
 const VERSION_EVERY_MS = 6 * 3600_000
@@ -127,7 +128,7 @@ async function redraw($) {
     const now = await $.clock.now()
     try {
       const usage = await $.session.usage()
-      if (usage && usage.context && typeof usage.context.percent === 'number') s.contextPercent = usage.context.percent
+      s.contextPercent = usage && usage.context && typeof usage.context.percent === 'number' ? usage.context.percent : null
     } catch { /* not reported here */ }
     const sirens = (main.reasons || []).filter((r) => r.kind === 'alert').map((r) => r.text)
     view = assess(s, now, cfg, sirens)
@@ -150,8 +151,9 @@ async function checkDrift($) {
   s.turnsSinceDrift = 0
   s.lastDriftAt = now
   try {
-    const r = await $.model.complete({ model: DRIFT_MODEL, system: DRIFT_SYSTEM, prompt: driftPrompt(s), maxTokens: 150 })
-    if (r && r.isAnswered) {
+    const gen = s.gen
+    const r = await $.model.complete({ model: DRIFT_MODEL, system: DRIFT_SYSTEM, prompt: driftPrompt(s), maxTokens: 150, timeoutMs: DRIFT_TIMEOUT_MS })
+    if (r && r.isAnswered && s.gen === gen && S === s) {
       const d = readDrift(r.text)
       if (d) s.drift = { ...d, at: now }
     }
@@ -245,6 +247,18 @@ export function register(on) {
     return next(e)
   })
 
+  // /clear ends the conversation without a new session.start: start this session's count over.
+  on('session.end', async ($, e, next) => {
+    try {
+      if (e.reason === 'clear') {
+        S = newSessionState(await $.clock.now())
+        lastLevel = null
+        await redraw($)
+      }
+    } catch { /* never block /clear */ }
+    return next(e)
+  })
+
   on('prompt.compose', async ($, e, next) => {
     const res = await next(e)
     if (!contextSection) return res
@@ -254,10 +268,12 @@ export function register(on) {
   // The person speaks: everything counted "without your word" starts over.
   on('prompt.submit', async ($, e, next) => {
     try {
-      if (!e.isMeta) {
+      if (isOwnerPrompt(e)) {
         const s = await state($)
-        ownerSpoke(s, e.command ? '' : e.text, await $.clock.now())
-        s.awaitingOwnerTurn = true
+        ownerSpoke(s, e.text, await $.clock.now())
+        // Typed over a running turn, the rest of that turn answers the person; typed while idle, the next one does.
+        if (e.turnId) s.inOwnerTurn = true
+        else s.awaitingOwnerTurn = true
         await redraw($)
       }
     } catch { /* never block a prompt */ }
@@ -285,6 +301,7 @@ export function register(on) {
         s.lastActivityAt = await $.clock.now()
         s.lastAnswer = String(e.answer || res.text || '')
         s.inOwnerTurn = false
+        s.awaitingOwnerTurn = false
         s.turnsSinceDrift++
         $.clock.after(0, () => checkDrift($))
         await redraw($)
@@ -319,18 +336,24 @@ export function register(on) {
       if (s) {
         const end = await $.clock.now()
         s.lastActivityAt = end
-        const failed = !res || Boolean(res.deny) || res.isError === true
-        if (e.tool === 'AskUserQuestion' && !failed) {
+        const denied = !res || Boolean(res.deny)
+        const failed = !denied && res.isError === true
+        const answered = e.tool === 'AskUserQuestion' && !denied && !failed &&
+          !(res.result && typeof res.result === 'object' && res.result.afkTimeoutMs)
+        if (answered) {
           ownerSpoke(s, res.text ? 'Answers: ' + String(res.text).slice(0, 600) : '', end)
+          s.inOwnerTurn = true // the rest of this turn acts on the person's answer
         }
         if (key) {
-          if (failed) {
+          if (denied) {
+            // a refused or interrupted call is not the command failing
+          } else if (failed) {
             if (s.fail.key === key) s.fail.count++
             else s.fail = { key, count: 1, cmd: e.command }
           } else if (s.fail.key) {
             s.fail = { key: null, count: 0, cmd: '' }
           }
-          if (label && !(res && res.deny)) s.outside.push({ label, at: end, asked: s.inOwnerTurn === true })
+          if (label && !denied) s.outside.push({ label, at: end, asked: s.inOwnerTurn === true })
         }
         await redraw($)
       }

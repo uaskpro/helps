@@ -347,3 +347,47 @@ test('version comparison for the update notice', async () => {
   assert.equal(isNewer('0.5.9', '0.6.0'), false)
   assert.equal(isNewer('garbage', '0.6.0'), false)
 })
+
+test('outside actions: quotes, heredocs, wrappers and deploy tools', async () => {
+  const { outsideAction } = await import('../src/session.js')
+  const cases = {
+    'ssh -p 22022 root@k3dp': 'ssh k3dp',
+    'ssh -i ~/.ssh/k git@github.com': null,
+    'sftp h11': 'sftp h11',
+    'git -C /x -c user.name=a push': 'git push',
+    'GIT_SSH_COMMAND="ssh -i k" git push origin main': 'git push',
+    'git push --dry-run': null,
+    'git merge --abort': null,
+    'git commit -m "x; git push later"': null,
+    'grep -E "a|ssh h11" f': null,
+    "git commit -m \"$(cat <<'EOF'\nRelease notes\nPush it\nEOF\n)\"": null,
+    'timeout 30 ssh h11 uptime': 'ssh h11',
+    'sudo -u ccode git push': 'git push',
+    'bash -c "ssh h11 ls"': 'ssh h11',
+    '( cd a && git push )': 'git push',
+    'if true; then git push; fi': 'git push',
+    'npm run deploy': 'npm run deploy',
+    'make deploy': 'make deploy',
+    'npx wrangler deploy': 'wrangler deploy',
+    'gh pr merge 12 --squash': 'gh pr merge',
+    'docker push img:1': 'docker push',
+    'kubectl apply -f x.yml': 'kubectl apply',
+    'curl -s -d @x https://api.example.com/v1': 'API write api.example.com',
+    'gh api -X POST repos/a/b/issues': 'gh api write',
+    'node deploy.mjs': 'deploy.mjs',
+    'deploy/dev/bin/console cache:clear': null,
+    '/srv/deploy/tools/check.sh': null,
+  }
+  for (const [cmd, want] of Object.entries(cases)) assert.equal(outsideAction(cmd), want, cmd)
+})
+
+test('who is the owner: the person, not notifications, peers, schedules or plugins', async () => {
+  const { isOwnerPrompt } = await import('../src/session.js')
+  for (const kind of ['composer', 'bridge', 'sdk', 'slack-ping', 'auto-continuation']) assert.equal(isOwnerPrompt({ origin: { kind } }), true, kind)
+  for (const kind of ['task-notification', 'scheduled-trigger', 'peer', 'peer-send-message', 'channel', 'plugin', 'unclassified', 'coordinator']) {
+    assert.equal(isOwnerPrompt({ origin: { kind } }), false, kind)
+  }
+  assert.equal(isOwnerPrompt({ origin: { kind: 'composer' }, command: { name: 'context', args: '' } }), false)
+  assert.equal(isOwnerPrompt({ isMeta: true }), false)
+  assert.equal(isOwnerPrompt({}), true)
+})

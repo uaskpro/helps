@@ -45,6 +45,8 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   on('model.complete', () => ({ value: { isAnswered: true, text: opts.drift ?? '{"on_track": true, "reason": "fine"}', usage: {} } }))
   on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
   on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('session.end', () => ({ sessionId: 's1' }))
+  on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => ({ result: e.afk ? { answers: {}, afkTimeoutMs: 60000 } : { answers: { q: 'yes' } }, text: e.afk ? '' : 'yes' }))
   on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ version: opts.published ?? '0.0.1' }) } }))
   on('tool.call', { tool: 'Bash' }, ($: any, e: any) => (/fail/.test(e.command)
     ? { isError: true, result: 'exit 1', text: 'exit 1' }
@@ -245,4 +247,22 @@ test('a newer published version shows beside the lamp, with how to update in Det
   const pane = await $.ui.mount({ plugin: 'helps', surface: 'desktop', component: 'Pane', requestId: 'helps-lamp',
     viewport: { columns: 100, rows: 40 }, props: {} } as any)
   expect(await pane.find({ type: 'Text', text: /Customize → Plugins → helps → Update/ })).toBeDefined()
+})
+
+test('a question nobody answered (the person was away) is not their word', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await bash($, 'scp dist.tar h11:/root/')
+  expect(last(status)).toMatch(/^🟡/)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [], afk: true } as any)
+  expect(last(status)).toMatch(/^🟡 SHOP · 1 outside action/)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as any)
+  expect(last(status)).toMatch(/^🟢 SHOP · on track/)
+})
+
+test('/clear starts the session count over', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS })
+  await bash($, 'ssh h11 uptime')
+  expect(last(status)).toMatch(/^🟡/)
+  await $.session.end({ reason: 'clear' } as any)
+  expect(last(status)).toMatch(/^🟢 SHOP · on track/)
 })
