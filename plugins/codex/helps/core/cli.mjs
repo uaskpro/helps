@@ -4,7 +4,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { webcrypto } from 'node:crypto'
 import { run, VERSION } from './core.js'
+
+// The core hashes with the web crypto API; Node 18 has it but not as a global.
+if (!globalThis.crypto) globalThis.crypto = webcrypto
 
 const SELF = fileURLToPath(import.meta.url)
 
