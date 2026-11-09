@@ -12,11 +12,21 @@ const io = {
   pathSep: path.delimiter,
   cli: `node "${SELF}"`,
   read: (p) => fs.readFile(p, 'utf8'),
+  // Whole-file replace through a temporary file, so a crash never leaves half a file. A link is
+  // written through, and the file keeps its permissions.
   write: async (p, text) => {
     await fs.mkdir(path.dirname(p), { recursive: true })
-    const tmp = `${p}.tmp-${process.pid}`
-    await fs.writeFile(tmp, text, 'utf8')
-    await fs.rename(tmp, p)
+    let target = p
+    let mode
+    try { target = await fs.realpath(p); mode = (await fs.stat(target)).mode & 0o777 } catch { /* a new file */ }
+    const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`)
+    try {
+      await fs.writeFile(tmp, text, { encoding: 'utf8', mode: mode ?? 0o644, flag: 'wx' })
+      await fs.rename(tmp, target)
+    } catch (err) {
+      await fs.rm(tmp, { force: true })
+      throw err
+    }
   },
   list: async (p) => (await fs.readdir(p, { withFileTypes: true })).map((d) => ({
     name: d.name,
@@ -39,12 +49,18 @@ const io = {
 async function link(args) {
   const i = args.indexOf('--dir')
   const dir = i >= 0 ? args[i + 1] : '~/.local/bin'
+  if (!dir) return { code: 2, err: 'helps: --dir needs a folder' }
   const home = process.env.HOME || process.env.USERPROFILE || ''
   const bindir = dir.startsWith('~') ? path.join(home, dir.slice(1)) : dir
   const target = path.join(bindir, process.platform === 'win32' ? 'helps.cmd' : 'helps')
   await fs.mkdir(bindir, { recursive: true })
   if (process.platform === 'win32') {
-    await fs.writeFile(target, `@node "${SELF}" %*\r\n`)
+    const line = `@node "${SELF}" %*\r\n`
+    let current = null
+    try { current = await fs.readFile(target, 'utf8') } catch { /* none */ }
+    if (current === line) return { code: 0, out: `Already there: ${target}` }
+    if (current !== null && !args.includes('--force')) return { code: 1, err: `${target} already exists. Overwrite with --force` }
+    await fs.writeFile(target, line)
   } else {
     let current = null
     try { current = await fs.readlink(target) } catch { /* none */ }

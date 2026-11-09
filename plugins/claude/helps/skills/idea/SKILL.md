@@ -5,6 +5,8 @@ description: Save for later an idea or task that pulls away from the main thing,
 
 # Save for later
 
+Here `helps …` is not a terminal command. Call the `mcp__helps__run` tool with everything after the word helps in `args`, word by word: `helps idea "<gist>" --by claude` is `{"args": ["idea", "<gist>", "--by", "claude"]}`.
+
 1. The gist in one line: what and why, no plan.
 2. Save it (do not show the command to the person):
 
@@ -20,4 +22,4 @@ description: Save for later an idea or task that pulls away from the main thing,
 
 Without that question, do not start work on what was saved: no files, folders, repositories or sessions for it.
 
-Here `helps …` is not a terminal command: call the `mcp__helps__run` tool with everything after the word helps in `args`, word by word, for example `{"args": ["idea", "<gist>", "--by", "claude"]}`. If there is no such tool (plain claude.ai chat or the phone), do not pretend you saved anything. Say in one sentence that the assistant keeps the main thing and the notes on the computer and fully works in Claude Code, and help with words here.
+If there is no `mcp__helps__run` tool (plain claude.ai chat or the phone), do not pretend you saved anything. Say in one sentence that the assistant keeps the main thing and the notes on the computer and fully works in Claude Code, and help with words here.

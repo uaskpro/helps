@@ -1,12 +1,14 @@
 // How this session is doing, as opposed to the person's work as a whole.
 //
 // The lamp's color comes from facts about this session only:
-//   · working without you: how long it has kept going since your last message;
-//   · outside actions: servers, pushes, merges, deploys since your last message;
+//   · working without you: how long it has kept going in turns it started itself
+//     (a background task reporting back, a schedule, another session) since your last message;
+//   · outside actions on its own: servers, pushes, merges, deploys in such turns;
 //   · stuck: the same command failing again and again, or one command running for ages;
 //   · context: how full the session's context window is;
 //   · drifting: a cheap model's check that the work still serves your last request (yellow at most);
 //   · an alert line (🚨, URGENT:) in a project's state file: emergency.
+// "Pause" is the one thing that acts: after the person presses it, tool calls are refused until they speak.
 // Pure functions; the mod feeds them what it sees.
 
 export const SESSION_DEFAULTS = {
@@ -156,6 +158,8 @@ function remote(kind, args) {
 const SCRIPT = /(^|[-_.])(merge-task|deploy|provision|release|publish|push)([-_.]|$)/i
 const LOCAL = /\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:\/|$)/
 const base = (p) => String(p || '').replace(/^.*\//, '')
+// The host of a URL, without any user:password@ in front of it.
+const hostOf = (url) => String(url).replace(/^https?:\/\/(?:[^/@]*@)?([^/:?#]+).*$/, '$1').slice(0, 60)
 
 function classify(ws, found, depth) {
   const w = core(ws)
@@ -203,10 +207,10 @@ function classify(ws, found, depth) {
     const writes = /^(POST|PUT|PATCH|DELETE)$/i.test(method) ||
       a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--data(-\w+)?=/.test(t))
     const url = a.find((t) => /^https?:\/\//.test(t))
-    if (writes && url && !LOCAL.test(url)) found.add(`API write ${url.replace(/^https?:\/\/([^/:]+).*$/, '$1')}`)
+    if (writes && url && !LOCAL.test(url)) found.add(`API write ${hostOf(url)}`)
   } else if (cmd === 'wget') {
     const url = a.find((t) => /^https?:\/\//.test(t))
-    if (url && !LOCAL.test(url) && a.some((t) => /^--(post-data|post-file|method=(POST|PUT|PATCH|DELETE))/i.test(t))) found.add(`API write ${url.replace(/^https?:\/\/([^/:]+).*$/, '$1')}`)
+    if (url && !LOCAL.test(url) && a.some((t) => /^--(post-data|post-file|method=(POST|PUT|PATCH|DELETE))/i.test(t))) found.add(`API write ${hostOf(url)}`)
   } else if (['bash', 'sh', 'zsh', 'dash'].includes(cmd) && a.includes('-c') && depth < 3) {
     const inner = a[a.indexOf('-c') + 1]
     if (inner) for (const seg of splitCommands(inner)) classify(words(seg), found, depth + 1)
@@ -221,8 +225,30 @@ function classify(ws, found, depth) {
 // What a shell command does outside this machine and this repository, or null.
 export function outsideAction(command) {
   const found = new Set()
-  for (const seg of splitCommands(command)) classify(words(seg), found, 0)
+  // The first 10,000 characters decide: a command longer than that is a script pasted inline.
+  for (const seg of splitCommands(String(command || '').slice(0, 10000))) classify(words(seg), found, 0)
   return found.size ? [...found].join(', ') : null
+}
+
+// Tools of connected services that change something there: a message sent, a page created, a pull request merged.
+const WRITE_VERB = /(^|[-_.])(send|post|reply|forward|create|update|edit|delete|remove|trash|archive|merge|publish|deploy|push|upload|write|move|share|schedule|fire|apply|run|execute|invite|comment)([-_.]|$)/i
+
+export function outsideTool(tool, isReadOnly) {
+  const m = /^mcp__(.+?)__(.+)$/.exec(String(tool || ''))
+  if (!m || m[1] === 'helps' || isReadOnly === true) return null
+  return WRITE_VERB.test(m[2]) ? `${m[1]}: ${m[2]}`.slice(0, 60) : null
+}
+
+// Command lines are shown in the band and sent to the drift check: keep secrets out of both.
+export function redact(text) {
+  return String(text ?? '')
+    .replace(/(authorization\s*[:=]\s*(?:bearer|basic|token)?\s*)[^\s"']+/gi, '$1***')
+    .replace(/((?:token|secret|password|passwd|pwd|api[-_]?key|access[-_]?key|private[-_]?key)\w*\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"'&]+)/gi, '$1***')
+    .replace(/(:\/\/[^/\s:@]+:)[^@\s/]+@/g, '$1***@')
+    .replace(/(:\/\/)[^/\s:@]{8,}@/g, '$1***@')
+    .replace(/(\s-u\s+[^\s:]+:)\S+/g, '$1***')
+    .replace(/\b(?:sk|pk|rk|ghp|gho|ghu|ghs|ghr|github_pat|glpat|xox[abprs])[-_][A-Za-z0-9_-]{12,}/g, '***')
+    .replace(/\b[A-Za-z0-9+_-]{40,}={0,2}/g, '***')
 }
 
 export function duration(ms) {
@@ -234,7 +260,7 @@ export function duration(ms) {
 }
 
 const short = (s, n = 60) => {
-  const t = String(s || '').replace(/\s+/g, ' ').trim()
+  const t = String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim()
   return t.length > n ? t.slice(0, n - 1) + '…' : t
 }
 
@@ -244,13 +270,19 @@ export function newSessionState(now) {
     startedAt: now,
     lastOwnerAt: now, // a reloaded mod has not seen the owner yet: count from the load
     lastActivityAt: now,
+    autoSince: null, // when the first turn the session started itself began, since the owner last spoke
+    awaitingUntil: null, // the owner spoke while idle: a main-loop turn starting before this answers them
+    ownerAgents: new Set(), // subagents first seen while the session was answering the owner
+    seenAgents: new Set(),
     asks: [], // the owner's last messages, newest last
     outside: [], // [{ label, at, asked }] since the owner's last message; asked = done in the turn the owner started
     inOwnerTurn: false, // the main loop is answering the owner right now
-    awaitingOwnerTurn: false, // the owner spoke while idle: the next main-loop turn answers them
     gen: 0, // bumped when the owner speaks, so a late drift verdict about older work is dropped
     fail: { key: null, count: 0, cmd: '' },
-    running: new Map(), // tool_use_id → { cmd, start }
+    running: new Map(), // tool_use_id → { cmd, start }: shell commands not finished yet
+    answerCredits: 0, // questions the person answered with buttons and whose answers are not written yet
+    answerCreditsAt: 0,
+    paused: false, // the person pressed Pause: tool calls are refused until they speak
     recent: [], // the session's last commands, for the drift check
     lastAnswer: '',
     contextPercent: null,
@@ -263,15 +295,31 @@ export function newSessionState(now) {
 // Prompt origins that are the person at the keyboard (or phone), not a notification, a peer, a schedule or a plugin.
 const OWNER_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'slack-ping', 'auto-continuation'])
 
-export function isOwnerPrompt(e) {
-  if (e.command) return false // a slash command answers no request about the work
-  if (e.origin && typeof e.origin.kind === 'string') return OWNER_ORIGINS.has(e.origin.kind)
-  return !e.isMeta // an engine that does not say where a prompt came from
+// Who a submitted prompt is from, as far as the lamp cares:
+//   'owner'   the person typed a request;
+//   'command' the person ran a slash command (present, but it says nothing about the work);
+//   'button'  the person pressed one of helps' own buttons;
+//   'other'   a notification, another session, a schedule, a channel, another plugin.
+export function promptFrom(e) {
+  const o = e.origin
+  if (o && o.kind === 'plugin') return o.name === 'helps' && o.asUser ? 'button' : 'other'
+  const person = o && typeof o.kind === 'string' ? OWNER_ORIGINS.has(o.kind) : !e.isMeta
+  if (!person) return 'other'
+  return e.command ? 'command' : 'owner'
+}
+
+// The person is here (a button, a command) but gave no new request: the clock starts over, the lists stay.
+export function ownerPresent(s, now) {
+  s.lastOwnerAt = now
+  s.lastActivityAt = now
+  s.autoSince = null
 }
 
 export function ownerSpoke(s, text, now) {
   s.lastOwnerAt = now
   s.lastActivityAt = now
+  s.autoSince = null
+  s.paused = false
   if (text) s.asks = s.asks.concat([String(text).slice(0, 2000)]).slice(-3)
   s.outside = []
   s.gen = (s.gen || 0) + 1
@@ -287,7 +335,8 @@ export function assess(s, now, cfg, sirens = []) {
 
   for (const text of sirens) add('siren', 'alert', text)
 
-  const alone = s.lastActivityAt - s.lastOwnerAt
+  // Time in turns the session started itself; a long turn the owner asked for is not "without you".
+  const alone = s.autoSince != null ? Math.max(0, s.lastActivityAt - s.autoSince) : 0
   if (alone >= cfg.without_you_red_min * 60000) add('red', 'alone', `working without you ${duration(alone)}`)
   else if (alone >= cfg.without_you_yellow_min * 60000) add('yellow', 'alone', `working without you ${duration(alone)}`)
 
@@ -295,16 +344,17 @@ export function assess(s, now, cfg, sirens = []) {
   const n = unasked.length
   if (n) {
     const labels = [...new Set(unasked.map((o) => o.label))]
-    const text = `${n} outside action${n > 1 ? 's' : ''} without your word: ${short(labels.join(', '), 70)}`
+    const text = `${n} outside action${n > 1 ? 's' : ''} on its own: ${short(labels.join(', '), 70)}`
     if (n >= cfg.outside_red) add('red', 'outside', text)
     else if (n >= cfg.outside_yellow) add('yellow', 'outside', text)
   }
 
-  if (s.fail.count >= cfg.stuck_repeats * 2) add('red', 'stuck', `stuck: "${short(s.fail.cmd, 40)}" failed ${s.fail.count}×`)
-  else if (s.fail.count >= cfg.stuck_repeats) add('yellow', 'stuck', `stuck: "${short(s.fail.cmd, 40)}" failed ${s.fail.count}×`)
+  if (s.fail.count >= cfg.stuck_repeats * 2) add('red', 'stuck', `stuck: "${short(redact(s.fail.cmd), 40)}" failed ${s.fail.count}×`)
+  else if (s.fail.count >= cfg.stuck_repeats) add('yellow', 'stuck', `stuck: "${short(redact(s.fail.cmd), 40)}" failed ${s.fail.count}×`)
   for (const r of s.running.values()) {
     const took = now - r.start
-    if (took >= cfg.long_command_min * 60000) add('yellow', 'stuck', `one command running ${duration(took)}: "${short(r.cmd, 40)}"`)
+    // Still running, or still waiting for the person's permission: either way it wants a look.
+    if (took >= cfg.long_command_min * 60000) add('yellow', 'stuck', `one command pending ${duration(took)}: "${short(redact(r.cmd), 40)}"`)
   }
 
   if (s.contextPercent != null) {
@@ -322,8 +372,12 @@ export function assess(s, now, cfg, sirens = []) {
 // The one line the band and the status line show.
 export function headline(project, view, s, now) {
   const parts = [project || 'this session']
-  if (!view.reasons.length) parts.push('on track')
-  else parts.push(...view.reasons.map((r) => r.text))
+  if (s.paused) parts.push('paused by you: write to it to go on')
+  if (!view.reasons.length) { if (!s.paused) parts.push('on track') }
+  else {
+    parts.push(...view.reasons.slice(0, 2).map((r) => r.text))
+    if (view.reasons.length > 2) parts.push(`+${view.reasons.length - 2} more`)
+  }
   if (!view.reasons.some((r) => r.kind === 'alone')) parts.push(`${duration(now - s.lastOwnerAt)} since your message`)
   if (s.contextPercent != null && !view.reasons.some((r) => r.kind === 'context')) parts.push(`context ${Math.round(s.contextPercent)}%`)
   return parts.join(' · ')
@@ -339,7 +393,7 @@ export function driftPrompt(s) {
   const asks = s.asks.map((a, i) => `${i + 1}. ${a}`).join('\n')
   return `The owner's last messages to the session, oldest first:\n<<<\n${asks}\n>>>\n\n` +
     `The session's latest reply:\n<<<\n${String(s.lastAnswer || '').slice(-1500)}\n>>>\n\n` +
-    `The session's recent commands:\n${s.recent.map((c) => '- ' + short(c, 120)).join('\n') || '- none'}\n\n` +
+    `The session's recent commands:\n${s.recent.map((c) => '- ' + short(redact(c), 120)).join('\n') || '- none'}\n\n` +
     'Is the session still working towards what the owner asked for?'
 }
 
@@ -349,6 +403,15 @@ export function readDrift(text) {
   try {
     const v = JSON.parse(m[0])
     if (typeof v.on_track !== 'boolean') return null
-    return { onTrack: v.on_track, reason: String(v.reason || '').slice(0, 160) }
+    return { onTrack: v.on_track, reason: String(v.reason || '').replace(/\s+/g, ' ').replace(/["`]/g, "'").trim().slice(0, 160) }
   } catch { return null }
+}
+
+// What the helps tool may do without asking the person. Reading, and writing the assistant's own data
+// folder (one-line values, checked and capped), always. Writing an answer into a project's state file
+// only when the person has just answered a question with buttons: nobody else may sign for them.
+export function helpsToolNeedsPerson(args, s, now) {
+  if (!Array.isArray(args) || args[0] !== 'answer') return false
+  const fresh = s && s.answerCredits > 0 && now - s.answerCreditsAt <= 30 * 60000
+  return !fresh
 }

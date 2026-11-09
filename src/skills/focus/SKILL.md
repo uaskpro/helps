@@ -4,6 +4,7 @@ description: Show or change the person's main thing. Use on "what is the main th
 ---
 
 # The main thing
+{{INTRO}}
 
 Find out (do not show the command to the person):
 
@@ -15,7 +16,7 @@ Answer in one line: "Main thing now: <project>, day N. Done when <…>."
 
 Change it only if the person wants to. First confirm, and ask what "done" will mean.
 {{ASK}}
-Options for "done" that fit the work: "First sale", "Site is live", "Client accepted the work", "My own".
+Options for "done" that fit the work: "First sale", "Site is live", "Client accepted the work".
 
 ```bash
 {{HELPS}} focus --set "<project>" --finish "<done>"

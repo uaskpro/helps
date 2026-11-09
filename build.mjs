@@ -16,8 +16,8 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.join(ROOT, 'src')
 
 const NAME = 'helps'
-const DESCRIPTION = 'BETA, not ready for everyday use. An assistant that keeps one main thing, saves everything else for later and goes through ' +
-  'waiting decisions with you, with buttons and plain words.'
+const DESCRIPTION = 'Release candidate. Keeps one main thing in front of you, saves everything else for later, goes through ' +
+  'waiting decisions with you, and puts a lamp on every session that shows how it is doing.'
 const AUTHOR = { name: 'uaskpro' }
 const REPO = 'https://github.com/uaskpro/helps'
 const SKILLS = ['setup', 'focus', 'idea', 'decide', 'review']
@@ -28,14 +28,15 @@ const FALLBACK_PATH = '\nIf there is no `helps` command on PATH, call the core b
 const AGENT_CFG = {
   claude: {
     helps: 'helps',
-    fallback: '\nHere `helps …` is not a terminal command: call the `mcp__helps__run` tool with everything after ' +
-      'the word helps in `args`, word by word, for example `{"args": ["idea", "<gist>", "--by", "claude"]}`. ' +
-      'If there is no such tool (plain claude.ai chat or the phone), do not pretend you saved anything. Say in ' +
-      'one sentence that the assistant keeps the main thing and the notes on the computer and fully works in ' +
-      'Claude Code, and help with words here.\n',
+    // Said before the first command: in Claude Code the commands are calls of the mod's tool.
+    intro: 'Here `helps …` is not a terminal command. Call the `mcp__helps__run` tool with everything after the word ' +
+      'helps in `args`, word by word: `helps idea "<gist>" --by claude` is `{"args": ["idea", "<gist>", "--by", "claude"]}`.',
+    fallback: '\nIf there is no `mcp__helps__run` tool (plain claude.ai chat or the phone), do not pretend you saved ' +
+      'anything. Say in one sentence that the assistant keeps the main thing and the notes on the computer and ' +
+      'fully works in Claude Code, and help with words here.\n',
   },
-  codex: { helps: 'helps', fallback: FALLBACK_PATH },
-  gemini: { helps: 'helps', fallback: FALLBACK_PATH },
+  codex: { helps: 'helps', intro: '', fallback: FALLBACK_PATH },
+  gemini: { helps: 'helps', intro: '', fallback: FALLBACK_PATH },
 }
 
 const GEMINI_COMMANDS = {
@@ -63,6 +64,7 @@ function common(dest, agent) {
   for (const skill of SKILLS) {
     let body = fs.readFileSync(path.join(SRC, 'skills', skill, 'SKILL.md'), 'utf8')
     body = body.replaceAll('{{HELPS}}', cfg.helps).replaceAll('{{AGENT}}', agent).replaceAll('{{ASK}}', ASK[agent])
+    body = body.replaceAll('{{INTRO}}\n', cfg.intro ? '\n' + cfg.intro + '\n' : '')
     body = body.replaceAll('{{FALLBACK}}\n', cfg.fallback).replaceAll('{{FALLBACK}}', cfg.fallback)
     write(path.join(dest, 'skills', skill, 'SKILL.md'), body)
   }
@@ -84,6 +86,7 @@ function buildClaude(out) {
   copy('register.js', path.join(dest, 'hooks', 'register.js'))
   copy('core.js', path.join(dest, 'hooks', 'core.js'))
   copy('session.js', path.join(dest, 'hooks', 'session.js'))
+  if (fs.existsSync(path.join(ROOT, 'LICENSE'))) write(path.join(dest, 'LICENSE'), fs.readFileSync(path.join(ROOT, 'LICENSE')))
   copy('mod.test.ts', path.join(dest, 'tests', 'mod.test.ts')) // claude plugin test
 }
 
@@ -92,7 +95,9 @@ function buildCodex(out) {
   common(dest, 'codex')
   dump(path.join(dest, '.codex-plugin', 'plugin.json'), manifest())
   dump(path.join(dest, 'hooks', 'hooks.json'), sessionHook(
-    'node "${PLUGIN_ROOT}/core/cli.mjs" context --agent codex', '', { timeout: 10, statusMessage: 'helps: main thing' }))
+    'node "${PLUGIN_ROOT}/core/cli.mjs" context --agent codex', '', {
+      commandWindows: 'node "%PLUGIN_ROOT%\\core\\cli.mjs" context --agent codex', // PLUGIN_ROOT is an environment variable
+      timeout: 10, statusMessage: 'helps: main thing' }))
 }
 
 function buildGemini(out) {

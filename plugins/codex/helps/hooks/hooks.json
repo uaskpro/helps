@@ -6,6 +6,7 @@
           {
             "type": "command",
             "command": "node \"${PLUGIN_ROOT}/core/cli.mjs\" context --agent codex",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\core\\cli.mjs\" context --agent codex",
             "timeout": 10,
             "statusMessage": "helps: main thing"
           }

@@ -1,2 +1,5 @@
+# Text files use LF everywhere: the build check compares bytes
+* text=auto eol=lf
+
 # Build output: copies of src/, not counted twice in language stats
 plugins/** linguist-generated=true

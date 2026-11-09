@@ -1,5 +1,5 @@
 {
   "name": "helps",
-  "version": "0.6.2",
-  "description": "BETA, not ready for everyday use. An assistant that keeps one main thing, saves everything else for later and goes through waiting decisions with you, with buttons and plain words."
+  "version": "0.99.0",
+  "description": "Release candidate. Keeps one main thing in front of you, saves everything else for later, goes through waiting decisions with you, and puts a lamp on every session that shows how it is doing."
 }

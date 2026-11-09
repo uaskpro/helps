@@ -15,7 +15,7 @@ Answer in one line: "Main thing now: <project>, day N. Done when <…>."
 
 Change it only if the person wants to. First confirm, and ask what "done" will mean.
 Ask questions through your built-in choice dialog if you have one (for example request_user_input); otherwise as a short numbered list, "reply with a number".
-Options for "done" that fit the work: "First sale", "Site is live", "Client accepted the work", "My own".
+Options for "done" that fit the work: "First sale", "Site is live", "Client accepted the work".
 
 ```bash
 helps focus --set "<project>" --finish "<done>"
