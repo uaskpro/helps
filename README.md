@@ -255,14 +255,15 @@ npm test
 
 What has been checked, and how:
 
-- automated: the core, the CLI and the build (`npm test`), the mod against the Claude Code engine
-  (`claude plugin test`), on Linux;
+- automated on every push: the core, the CLI and the build (`npm test`) on Linux, macOS and
+  Windows with Node 18 and 22; on Linux also the mod against the Claude Code engine
+  (`claude plugin test`);
 - by hand in Claude Code on Linux (terminal): install from this repository into a clean
   configuration, setup, the brake, decisions and answers, an alert line, the lamp turning yellow
   for an outside action;
 - by hand in the desktop app on Windows: the band, setup and the lamp's colors, in a local
   session and over Remote Control to a Linux machine;
-- not yet run by a person: macOS, VS Code, the mobile app, and the Codex and Gemini wrappers on
-  this version (their formats were checked against the CLIs' documentation).
+- not yet tried by a person: Claude Code on macOS, VS Code, the mobile app, and the Codex and
+  Gemini wrappers on this version (their formats were checked against the CLIs' documentation).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
