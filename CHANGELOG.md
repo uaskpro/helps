@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.99.2
+
+- The band above the prompt is smaller and shorter out of the box: small text, the lamp, the top
+  reason and **Details**. The other buttons moved into Details; **Set up helps** and **Resume**
+  stay on the band when they are needed.
+- The look is a setting: `"band": {"size": "small|smallest|normal", "layout": "lamp|line|full"}`
+  in `config.json`. `"layout": "full", "size": "normal"` is the band as it was in 0.99.1.
+
 ## 0.99.1
 
 - **Realign**: a button that tells the session to check itself against the project's own rules,

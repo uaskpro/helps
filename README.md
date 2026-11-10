@@ -57,8 +57,16 @@ Run things by hand with `/helps:setup`, `/helps:focus`, `/helps:idea`, `/helps:d
 ## The lamp
 
 A band above the prompt: 🟢 on track, 🟡 needs a look, 🔴 needs you, 🚨 an alert (blinks for a
-minute). It names the session's project, the reason, and how long ago you last wrote. Your main
-thing is shown beside it, dimmed.
+minute). It names the session's project, the top reason, and how long ago you last wrote. It is
+one short line in small text:
+
+```
+● shop · 3 outside actions on its own: ssh web1, scp web1 · +1 more   Details
+```
+
+**Details** opens everything else: every signal, your main thing, and the buttons. If you want
+it all on the band instead, set `"band": {"layout": "full"}` in `config.json` (see
+[Your data](#your-data)):
 
 ```
 ● shop · 3 outside actions on its own: ssh web1, scp web1 · working without you 2 h 15 min     main: helps
@@ -77,7 +85,7 @@ What it watches:
 
 🚨 means a line in a project's state file starts with `🚨`, `URGENT:` or `ALERT:`.
 
-The buttons fit the reason:
+The buttons fit the reason (in Details, or on the band in the `line` and `full` layouts):
 
 - **Realign** is always there. It tells the session to re-read the project's own rules
   (`CLAUDE.md` or `AGENTS.md`, what they point to, `STATE.md`), list where it left them since your
@@ -144,12 +152,26 @@ the same file under `## Owner answers (helps)`.
     "drift_every_turns": 3,
     "drift_every_min": 10,
     "update_check": true
+  },
+  "band": {
+    "size": "small",
+    "layout": "lamp"
   }
 }
 ```
 
 `owner_headings` are regular expressions (case-insensitive) for state files in other languages;
 `siren_prefixes` are extra words that start an alert line. A value of the wrong type is ignored.
+
+`band` is how the band above the prompt looks:
+
+| Key | Values |
+|---|---|
+| `size` | `small` (default), `smallest`, `normal`. The terminal has one text size and ignores it. |
+| `layout` | `lamp` (default): the lamp, the top reason and **Details**; every other button is inside Details. `line`: the full line and all buttons in one row. `full`: the full line, and the buttons on a row of their own. |
+
+In the `lamp` layout **Set up helps** (before the first run) and **Resume** (while paused) stay on
+the band. A change is picked up within five minutes, or at once in a new session.
 
 ## Privacy and safety
 

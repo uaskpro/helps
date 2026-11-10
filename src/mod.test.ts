@@ -30,8 +30,10 @@ function disk(files: Record<string, string>, mtimeMs = DAY) {
   return { fs, dirs }
 }
 
-async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number; cwd?: string; context?: number; drift?: string; published?: string; surface?: string | null } = {}) {
+async function start($: any, on: any, files: Record<string, string>, opts: { mtimeMs?: number; cwd?: string; context?: number; drift?: string; published?: string; surface?: string | null; band?: 'default' } = {}) {
   const cwd = opts.cwd || '/work/shop'
+  // Most tests look at every button, so they ask for the layout that shows them all; `band: 'default'` leaves helps' own.
+  if (opts.band !== 'default') files = { '/home/u/helps-data/config.json': '{"band": {"layout": "full", "size": "normal"}}', ...files }
   // 'mobile' draws no band above the prompt, so the lamp's line is in the status line, where a test can read it.
   const surface = opts.surface === undefined ? 'mobile' : opts.surface
   const calls = { model: 0, fetch: 0, asked: [] as string[], reply: 'Do not write' }
@@ -452,4 +454,60 @@ test('Realign is there on a calm session too, and says nothing it did not see', 
   await ui.press({ key: 'helps-realign' })
   expect(last(prompts)).toContain('Re-read this project\'s rules')
   expect(last(prompts)).not.toContain('helps recorded')
+})
+
+test('out of the box the band is small and short: the lamp, the top reason, Details; the rest is in Details', async ($, on) => {
+  const { prompts } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS }, { band: 'default' })
+  await own($)
+  await bash($, 'bin/merge-task task/a')
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const text: any = await ui.find({ type: 'Text', text: /^shop · 1 outside action on its own/ })
+  expect(text).toBeDefined()
+  expect(text.props.size).toBe('footnote')
+  expect(await ui.find({ type: 'Text', text: /main: helps/ })).toBeUndefined()
+  expect(await ui.find({ key: 'helps-more' })).toBeDefined()
+  for (const key of ['helps-realign', 'helps-report', 'helps-pause']) expect(await ui.find({ key })).toBeUndefined()
+  await ui.unmount()
+  const pane = await $.ui.mount(PANE)
+  for (const key of ['pane-helps-realign', 'pane-helps-report', 'pane-helps-pause']) expect(await pane.find({ key })).toBeDefined()
+  expect(await pane.find({ key: 'pane-helps-more' })).toBeUndefined()
+  await pane.press({ key: 'pane-helps-realign' })
+  expect(last(prompts)).toContain('Re-read this project\'s rules')
+})
+
+test('the short band still shows what cannot wait: Set up before the first run', async ($, on) => {
+  await start($, on, {}, { band: 'default' })
+  const first = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await first.find({ key: 'helps-setup' })).toBeDefined()
+  await first.unmount()
+})
+
+test('paused in the short band: Resume is on it', async ($, on) => {
+  const { status } = await start($, on, { [DATA + '/FOCUS.md']: FOCUS }, { band: 'default' })
+  await own($)
+  await bash($, 'scp dist.tar web1:/root/')
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'pane-helps-pause' })
+  expect(last(status)).toContain('paused by you')
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ key: 'helps-resume' })).toBeDefined()
+  await ui.press({ key: 'helps-resume' })
+  expect(last(status)).not.toContain('paused')
+})
+
+test('the band\'s look is a setting: one row with every button, the smallest text', async ($, on) => {
+  await start($, on, { [DATA + '/FOCUS.md']: FOCUS, [DATA + '/config.json']: '{"band": {"layout": "line", "size": "smallest"}}' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const text: any = await ui.find({ type: 'Text', text: /^shop · on track · 0 min since your message/ })
+  expect(text.props.size).toBe('caption')
+  expect(await ui.find({ key: 'helps-realign' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /main: helps/ })).toBeDefined()
+})
+
+test('a band setting helps does not know falls back to the default', async ($, on) => {
+  await start($, on, { [DATA + '/FOCUS.md']: FOCUS, [DATA + '/config.json']: '{"band": {"layout": "sideways", "size": 7}}' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const text: any = await ui.find({ type: 'Text', text: /^shop · on track · you 0 min ago$/ })
+  expect(text.props.size).toBe('footnote')
+  expect(await ui.find({ key: 'helps-realign' })).toBeUndefined()
 })

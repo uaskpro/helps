@@ -11,7 +11,7 @@
 
 import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES, VERSION } from './core.js'
 import {
-  sessionConfig, newSessionState, ownerSpoke, ownerPresent, promptFrom, outsideAction, outsideTool, assess,
+  sessionConfig, bandConfig, BAND_DEFAULTS, TEXT_SIZE, newSessionState, ownerSpoke, ownerPresent, promptFrom, outsideAction, outsideTool, assess,
   headline, duration, redact, DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, helpsToolNeedsPerson,
 } from './session.js'
 
@@ -38,6 +38,7 @@ let main = { level: 'unknown', headline: '', reasons: [] } // the person's main 
 let S = null // this session (session.js)
 let view = { level: 'green', reasons: [] }
 let cfg = { ...SESSION_DEFAULTS }
+let band = { ...BAND_DEFAULTS } // how the band looks: config.json "band"
 let project = ''
 let blinkOn = true
 let lastLevel = null
@@ -101,14 +102,15 @@ async function state($) {
   return S
 }
 
-function line(now) {
+function line(now, brief = false) {
   if (errorText) return 'helps: could not check — ' + errorText
-  return headline(project, view, S, now)
+  return headline(project, view, S, now, brief)
 }
 
-function mainNote() {
-  const update = latest ? `update ${latest} available` : ''
-  const note = main.level === 'none' ? 'helps is not set up' : main.project ? 'main: ' + main.project : ''
+// Beside the lamp, dimmed. The brief form leaves the main thing to Details.
+function mainNote(brief = false) {
+  const update = latest ? (brief ? `update ${latest}` : `update ${latest} available`) : ''
+  const note = main.level === 'none' ? 'helps is not set up' : main.project && !brief ? 'main: ' + main.project : ''
   return [note, update].filter(Boolean).join(' · ')
 }
 
@@ -140,7 +142,8 @@ async function refresh($) {
       try {
         const raw = JSON.parse(await $.fs.read(ctx.f('config.json')))
         cfg = sessionConfig(raw && raw.session)
-      } catch { cfg = sessionConfig(null) }
+        band = bandConfig(raw && raw.band)
+      } catch { cfg = sessionConfig(null); band = bandConfig(null) }
       if (ctx.cwd) project = baseName(ctx.cwd)
       main = await coreHealth(ctx)
       errorText = null
@@ -201,7 +204,7 @@ async function redraw($) {
     if (view.level === 'siren' && lastLevel !== 'siren') startBlink($)
     lastLevel = view.level
     const text = (view.level === 'siren' ? '🚨 EMERGENCY · ' : LAMP[view.level] + ' ') + line(now) + (mainNote() ? ' · ' + mainNote() : '')
-    const drawn = `${bandShown()}|${text}|${buttonKeys().join(',')}`
+    const drawn = `${bandShown()}|${band.size}/${band.layout}|${text}|${buttonKeys().join(',')}`
     if (drawn === lastDrawn) return // nothing a person would see has changed
     lastDrawn = drawn
     // Where the band above the prompt is drawn, the status line would only repeat it.
@@ -268,8 +271,8 @@ function realignText(s) {
   ].join('\n')
 }
 
-// Which buttons the band shows now: [key, label, what it does].
-function buttonList() {
+// Every button that makes sense now: [key, label, what it does].
+function allButtons() {
   const b = []
   if (S && S.paused) b.push(['helps-resume', 'Resume', 'resume'])
   if (main.level !== 'none') b.push(['helps-realign', 'Realign', 'realign'])
@@ -285,6 +288,9 @@ function buttonList() {
   b.push(['helps-more', 'Details', 'details'])
   return b
 }
+// The band: all of them, or in the "lamp" layout only what cannot wait behind Details.
+const ON_LAMP = ['resume', 'setup', 'details']
+const buttonList = () => (band.layout === 'lamp' ? allButtons().filter((b) => ON_LAMP.includes(b[2])) : allButtons())
 const buttonKeys = () => buttonList().map((b) => b[0])
 
 function press($, what) {
@@ -309,8 +315,22 @@ function press($, what) {
   } else ask($, ASKS[what])
 }
 
-function buttons($, Button) {
-  return buttonList().map(([key, label, what]) => Button({ key, label, plain: true, onPress: () => press($, what) }))
+function buttons($, Button, Text, size) {
+  return buttonList().map(([key, label, what]) => Button({
+    key, label, plain: true, onPress: () => press($, what),
+    ...(size ? { children: [Text({ size, children: [label] })] } : {}),
+  }))
+}
+
+// In Details: the same buttons under their own keys. One that sends a message closes the pane.
+function paneButtons($, Button) {
+  return allButtons().filter((b) => b[2] !== 'details').map(([key, label, what]) => Button({
+    key: 'pane-' + key, label,
+    onPress: () => {
+      press($, what)
+      if (what !== 'pause' && what !== 'resume') $.ui.close({ id: PANE }).catch(() => {})
+    },
+  }))
 }
 
 const WRITE_IT = 'Write it'
@@ -573,32 +593,33 @@ export function register(on) {
     const now = await $.clock.now()
     await state($)
     const siren = view.level === 'siren'
+    const size = TEXT_SIZE[band.size]
+    const brief = band.layout === 'lamp'
+    const sized = size ? { size } : {}
     const dot = Text({
+      ...sized,
       color: siren && !blinkOn ? undefined : COLORS[view.level],
       dimColor: siren && !blinkOn ? true : undefined,
       inverse: siren && blinkOn ? true : undefined,
       weight: 'semibold',
       children: [siren ? ' 🚨 EMERGENCY ' : '● '],
     })
-    const top = Box({
-      flexDirection: 'row',
-      columnGap: 2,
-      children: [
-        Box({ flexDirection: 'row', flexShrink: 1, children: [dot, Text({ wrap: 'truncate-end', color: siren ? 'red' : undefined, children: [line(now)] })] }),
-        ...(mainNote() ? [Text({ dimColor: true, wrap: 'truncate-end', children: [mainNote()] })] : []),
-      ],
-    })
-    const ours = Box({
-      flexDirection: 'column',
-      children: [top, Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: buttons($, Button) })],
-    })
+    const head = Box({ flexDirection: 'row', flexShrink: 1, children: [dot, Text({ ...sized, wrap: 'truncate-end', color: siren ? 'red' : undefined, children: [line(now, brief)] })] })
+    const note = mainNote(brief) ? [Text({ ...sized, dimColor: true, wrap: 'truncate-end', children: [mainNote(brief)] })] : []
+    const row = buttons($, Button, Text, size)
+    const ours = band.layout === 'full'
+      ? Box({
+        flexDirection: 'column',
+        children: [Box({ flexDirection: 'row', columnGap: 2, children: [head, ...note] }), Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: row })],
+      })
+      : Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: [head, ...note, ...row] })
     if (!theirs) return ours
     return Box({ flexDirection: 'column', children: [ours, theirs] })
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const s = await state($)
     const now = await $.clock.now()
     const rows = []
@@ -615,6 +636,8 @@ export function register(on) {
     }
     if (s.drift) t('drift', `Drift check ${clock(s.drift.at)}: ${s.drift.onTrack ? 'on track' : 'drifting'}${s.drift.reason ? ' — ' + s.drift.reason : ''}`, { dimColor: true })
     else if (cfg.drift_check) t('drift', 'Drift check: not run yet', { dimColor: true })
+    const acts = paneButtons($, Button)
+    if (acts.length) rows.push(Box({ key: 'acts', flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: acts }))
     t('sep', ' ')
     if (s.paused) t('paused', 'Paused by you: tool calls are refused until you write to the session or press Resume.', { color: 'yellow' })
     if (main.level === 'none') t('m0', 'Main thing: helps is not set up.', { weight: 'semibold' })

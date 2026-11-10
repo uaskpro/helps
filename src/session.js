@@ -48,6 +48,22 @@ export function sessionConfig(raw) {
   return out
 }
 
+// How the band above the prompt looks: config.json "band". A value that is not listed falls back to the default.
+//   size:   small | smallest | normal   (the terminal has one text size and ignores it)
+//   layout: lamp (the lamp, a short line and Details; the other buttons are in Details)
+//           line (everything in one row) | full (the line, and the buttons on a row of their own)
+export const BAND_DEFAULTS = { size: 'small', layout: 'lamp' }
+const BAND_VALUES = { size: ['small', 'smallest', 'normal'], layout: ['lamp', 'line', 'full'] }
+export const TEXT_SIZE = { small: 'footnote', smallest: 'caption', normal: undefined }
+
+export function bandConfig(raw) {
+  const out = { ...BAND_DEFAULTS }
+  if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(BAND_VALUES)) if (BAND_VALUES[k].includes(raw[k])) out[k] = raw[k]
+  }
+  return out
+}
+
 const LEVELS = ['green', 'yellow', 'red', 'siren']
 export const higher = (a, b) => (LEVELS.indexOf(b) > LEVELS.indexOf(a) ? b : a)
 
@@ -370,16 +386,18 @@ export function assess(s, now, cfg, sirens = []) {
 }
 
 // The one line the band and the status line show.
-export function headline(project, view, s, now) {
+// `brief` is the short line of the "lamp" layout: the top reason only, the rest is in Details.
+export function headline(project, view, s, now, brief = false) {
   const parts = [project || 'this session']
-  if (s.paused) parts.push('paused by you: write to it to go on')
+  const shown = brief ? 1 : 2
+  if (s.paused) parts.push(brief ? 'paused by you' : 'paused by you: write to it to go on')
   if (!view.reasons.length) { if (!s.paused) parts.push('on track') }
   else {
-    parts.push(...view.reasons.slice(0, 2).map((r) => r.text))
-    if (view.reasons.length > 2) parts.push(`+${view.reasons.length - 2} more`)
+    parts.push(...view.reasons.slice(0, shown).map((r) => r.text))
+    if (view.reasons.length > shown) parts.push(`+${view.reasons.length - shown} more`)
   }
-  if (!view.reasons.some((r) => r.kind === 'alone')) parts.push(`${duration(now - s.lastOwnerAt)} since your message`)
-  if (s.contextPercent != null && !view.reasons.some((r) => r.kind === 'context')) parts.push(`context ${Math.round(s.contextPercent)}%`)
+  if (!view.reasons.some((r) => r.kind === 'alone')) parts.push(brief ? `you ${duration(now - s.lastOwnerAt)} ago` : `${duration(now - s.lastOwnerAt)} since your message`)
+  if (!brief && s.contextPercent != null && !view.reasons.some((r) => r.kind === 'context')) parts.push(`context ${Math.round(s.contextPercent)}%`)
   return parts.join(' · ')
 }
 
