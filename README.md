@@ -11,24 +11,21 @@ doing. It asks with pop-up buttons and talks in plain words; there are no comman
 
 ## Install
 
-No terminal needed:
-
-1. Open [claude.ai/customize/plugins](https://claude.ai/customize/plugins)
-   (or in the Claude app: **Customize → Plugins**).
-2. **Add → Add marketplace**, paste `uaskpro/helps`, confirm.
-3. **helps** appears in the list: click **Add**.
-4. Start a new Claude Code session. The plugin comes along from your account.
-
-Already in Claude Code (terminal, VS Code, the desktop app's Code tab)? One line in the prompt:
+In Claude Code (terminal, VS Code, the desktop app's Code tab), one line in the prompt:
 
 ```text
 /plugin install helps --marketplace uaskpro/helps
 ```
 
 Then turn on updates once: `/plugin` → **Marketplaces** → `uaskpro-helps` → **Enable auto-update**.
-Claude Code keeps auto-update off for marketplaces outside Anthropic's own. A copy added through
-claude.ai is updated with the **Update** button on the plugin's page there. Either way, helps
-tells you when a newer version is out.
+Claude Code keeps auto-update off for marketplaces outside Anthropic's own. helps also tells you
+when a newer version is out.
+
+> [!IMPORTANT]
+> For now, do not add helps through **claude.ai → Customize → Plugins**. The copy your account
+> syncs into Claude Code arrives without the part that draws the lamp, and it hides the copy you
+> installed above. helps is on its way to the official plugin directory; once it is listed there,
+> one click in the directory will be the way to install it everywhere.
 
 Nothing else to install: in Claude Code helps runs entirely inside Claude Code, on Linux, macOS
 and Windows.
@@ -230,16 +227,18 @@ Update with `git -C ~/helps pull`; the Gemini link picks changes up by itself.
 ## Updating and removing
 
 - **Update**: with auto-update on, nothing to do. By hand: `/plugin` → **Installed** → helps →
-  **Update now**, then `/reload-plugins`; or the **Update** button on the plugin's page on
-  claude.ai. Sessions already running keep the old version until `/reload-plugins`.
-- **Remove**: `/plugin` → **Installed** → helps → **Uninstall** (or switch it off on claude.ai).
+  **Update now**, then `/reload-plugins`. Sessions already running keep the old version until
+  `/reload-plugins`.
+- **Remove**: `/plugin` → **Installed** → helps → **Uninstall**.
   Your data stays in `~/helps-data`; delete that folder to remove it too.
 
 ## If something is off
 
 - **No lamp.** It is drawn only where the table above says. In a cloud session there is none by
   design. Elsewhere: `/reload-plugins`, then ask the session "run helps doctor": it reports the
-  version, the data folder and where the lamp can be shown.
+  version, the data folder and where the lamp can be shown. If the session has no helps tool at
+  all and you added helps on claude.ai (**Customize → Plugins**), remove it there and start a new
+  session: that copy comes without the lamp and hides the one you installed.
 - **Decisions are not found.** The file must be Markdown, listed in `inbox-sources.txt`, and the
   questions must be list items under a heading helps knows (or one you added to `owner_headings`).
 - **The lamp is yellow for a push you asked for.** It counts what happens in turns the session
@@ -293,3 +292,7 @@ What has been checked, and how:
   Gemini wrappers on this version (their formats were checked against the CLIs' documentation).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

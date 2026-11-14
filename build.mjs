@@ -76,7 +76,7 @@ function common(dest, agent) {
 }
 
 const manifest = () => ({ name: NAME, version: VERSION, description: DESCRIPTION, author: AUTHOR,
-  repository: REPO, license: 'UNLICENSED' })
+  repository: REPO, license: 'MIT' })
 
 function buildClaude(out) {
   const dest = path.join(out, 'claude', NAME)
@@ -88,6 +88,8 @@ function buildClaude(out) {
   copy('session.js', path.join(dest, 'hooks', 'session.js'))
   if (fs.existsSync(path.join(ROOT, 'LICENSE'))) write(path.join(dest, 'LICENSE'), fs.readFileSync(path.join(ROOT, 'LICENSE')))
   copy('mod.test.ts', path.join(dest, 'tests', 'mod.test.ts')) // claude plugin test
+  write(path.join(dest, '.claude-plugin', 'icon.png'), fs.readFileSync(path.join(ROOT, 'assets', 'icon.png')))
+  copy('PLUGIN-README.md', path.join(dest, 'README.md'))
 }
 
 function buildCodex(out) {

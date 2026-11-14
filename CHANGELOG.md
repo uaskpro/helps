@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.99.3
+
+- License: MIT.
+- The plugin has an icon and a README of its own that lists what it runs, reads, writes, sends
+  and fetches, ready for the official plugin directory.
+- Install: one way, through Claude Code. Adding helps on claude.ai (**Customize → Plugins**) is
+  not supported for now: the copy synced from the account arrives without the lamp and hides the
+  installed one.
+
 ## 0.99.2
 
 - The band above the prompt is smaller and shorter out of the box: small text, the lamp, the top

@@ -1,10 +1,10 @@
 {
   "name": "helps",
-  "version": "0.99.2",
+  "version": "0.99.3",
   "private": true,
   "description": "An assistant for Claude Code, Codex and Gemini CLI that keeps one main thing and saves everything else for later.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": { "node": ">=18" },
   "scripts": {
     "build": "node build.mjs",

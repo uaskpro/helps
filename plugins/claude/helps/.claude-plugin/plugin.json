@@ -1,10 +1,10 @@
 {
   "name": "helps",
-  "version": "0.99.2",
+  "version": "0.99.3",
   "description": "Release candidate. Keeps one main thing in front of you, saves everything else for later, goes through waiting decisions with you, and puts a lamp on every session that shows how it is doing.",
   "author": {
     "name": "uaskpro"
   },
   "repository": "https://github.com/uaskpro/helps",
-  "license": "UNLICENSED"
+  "license": "MIT"
 }
