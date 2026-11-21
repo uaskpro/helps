@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fitness functions of project/BLUEPRINT.md, section 10 (arch.fitness-functions): FF-1, FF-2, FF-3, FF-6.
+// Fitness functions of project/BLUEPRINT.md, section 10 (arch.fitness-functions): FF-1, FF-2, FF-3, FF-6, FF-7.
 // Each has a self-test (a broken sample it must reject, a clean one it must accept; R4) and fails when it
 // finds nothing to check (R5). Usage: node tools/fitness.mjs
 import { spawnSync } from 'node:child_process'
@@ -19,6 +19,15 @@ function ff1({ isGit, tags, version, sameAsTag }) {
     'raise the version (project/RELEASING.md) or undo the change to plugins/']
 }
 
+// FF-7 (NFR-12, quality.quality-release R14): on `main` the marketplace serves what is there, so a
+// version without a tag may be on `main` only with its release record approved by the owner.
+const APPROVED = /^- \[x\] Approved\b/m
+function ff7({ onMain, released, record }) {
+  if (!onMain || released) return []
+  if (record === null) return ['FF-7: an untagged version is on main without project/releases/<version>.md (project/RELEASING.md)']
+  return APPROVED.test(record) ? [] : ["FF-7: an untagged version is on main, but its release record has no '- [x] Approved' line"]
+}
+
 // FF-2 (DR-1, DR-2): the core and the session model reach nothing outside themselves. No imports (static or
 // dynamic), no require, no Node-only globals, no timers, no engine handle `$`, no network. Web-standard
 // globals (Date, crypto.subtle, TextEncoder, Intl) are allowed.
@@ -29,11 +38,15 @@ const FORBIDDEN = [
   [/\b(setTimeout|setInterval|setImmediate|queueMicrotask)\s*\(/, 'a timer'],
   [/(^|[^\w$])\$\.[a-z]/, 'the Claude Code engine handle $'],
   [/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\b/, 'a network call'],
+  [/\bnew\s+Function\b|\beval\s*\(/, 'code built from text'],
 ]
 function ff2(name, text) {
   const out = []
   text.split('\n').forEach((line, i) => {
-    const code = line.replace(/\/\/.*$/, '').replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g, "''")
+    // Strings are blanked, but the ${...} parts of a template literal are code and are kept.
+    const code = line.replace(/\/\*.*?\*\/|\/\/.*$/g, '')
+      .replace(/`(?:\\.|[^`\\])*`/g, (m) => (m.match(/\$\{[^}]*\}/g) || []).join(' '))
+      .replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''")
     for (const [re, what] of FORBIDDEN) if (re.test(code)) out.push(`FF-2: ${name}:${i + 1}: ${what} (DR-1)`)
   })
   return out
@@ -72,6 +85,14 @@ function selfTest() {
     one(ff2('bad', 'setTimeout(f, 10)')),
     one(ff2('bad', 'await $.fs.read(p)')),
     one(ff2('bad', 'await fetch(url)')),
+    one(ff2('bad', 'const s = `${process.env.HOME}`')),
+    one(ff2('bad', 'const f = new Function("return 1")')),
+    none(ff2('good', 'const s = `process.env is ${x}` /* process. */')),
+    one(ff7({ onMain: true, released: false, record: null })),
+    one(ff7({ onMain: true, released: false, record: '- [ ] Approved by' })),
+    none(ff7({ onMain: true, released: false, record: 'x\n- [x] Approved by the owner on 2026-11-22' })),
+    none(ff7({ onMain: false, released: false, record: null })),
+    none(ff7({ onMain: true, released: true, record: null })),
     none(ff2('good', '// the mod reaches files through $.fs\nconst a = "process.env"\nawait ctx.io.read(p)\nnew Date(ms); crypto.subtle')),
     one(ff3('{"dependencies":{"left-pad":"1.0.0"}}')),
     none(ff3('{"name":"x","devDependencies":{"y":"1"}}')),
@@ -91,6 +112,13 @@ const sameAsTag = isGit && tags.includes(`v${version}`) &&
   git(['diff', '--quiet', `v${version}`, '--', 'plugins', '.claude-plugin', '.agents']).status === 0
 failures.push(...ff1({ isGit, tags, version, sameAsTag }))
 
+const branch = process.env.GITHUB_BASE_REF || (process.env.GITHUB_REF || '').replace(/^refs\/heads\//, '') ||
+  (isGit ? git(['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim() : '')
+const onMain = branch === 'main'
+const recordPath = path.join(ROOT, 'project', 'releases', `${version}.md`)
+const record = fs.existsSync(recordPath) ? fs.readFileSync(recordPath, 'utf8') : null
+failures.push(...ff7({ onMain, released: tags.includes(`v${version}`), record }))
+
 const core = ['src/core.js', 'src/session.js'].filter((f) => fs.existsSync(path.join(ROOT, f)))
 if (core.length !== 2) failures.push('FF-2: found nothing to check (src/core.js, src/session.js)')
 for (const f of core) failures.push(...ff2(f, fs.readFileSync(path.join(ROOT, f), 'utf8')))
@@ -107,4 +135,5 @@ if (failures.length) {
   process.exit(1)
 }
 console.log(`FF-1: ${tags.includes(`v${version}`) ? `plugins/ equals v${version}` : `${version} not released yet`}; ` +
+  `FF-7: ${onMain ? 'on main' : `not on main (${branch || 'unknown'})`}; ` +
   `FF-2, FF-3: ${core.length} core files; FF-6: ${text.length} text files; self-tests passed`)

@@ -142,8 +142,9 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
   and FF-4 on Claude Code 2.1.321; FF-2, FF-3. Expected: all green.
 - [ ] **AC-17** (NFR-7) By review: every question the skills ask is an AskUserQuestion with 2–4 options,
   the recommended first. By: the verifier of each change to `src/skills/`.
-- [ ] **AC-18** (NFR-10) Automated: core "setup, scan and sources" runs with `HELPS_DATA` set to a
-  temporary folder. Expected: nothing written outside it.
+- [ ] **AC-18** (NFR-10) Automated: the core tests run with `HELPS_DATA` pointing at a temporary folder
+  and find the data there ("setup, scan and sources"). By review: no code path writes data outside
+  `HELPS_DATA` (NFR-2).
 - [ ] **AC-19** (NFR-11) Automated: FF-6 (no Cyrillic); `claude plugin validate` reads the manifest;
   by review: `LICENSE` is MIT.
 

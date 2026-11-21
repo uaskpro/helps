@@ -38,7 +38,6 @@ Option 1, MIT (`LICENSE`, `package.json`, `plugin.json`).
 ## Evidence
 
 - `LICENSE` (MIT) and the `license` field in `package.json` and `plugin.json` since 0.99.3 (2026-11-14).
-- MIT is the licence most Claude Code and editor plugins use (survey of public plugin repositories, 2026-11-14).
 
 ## Owner decision
 

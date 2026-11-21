@@ -27,7 +27,7 @@ function run(name, cmd, args, { cwd = ROOT, shell = false, after = () => {} } = 
 
 run('core, CLI and build output tests', process.execPath, ['--test', 'tests/core.test.mjs'])
 run('FF-5: build output is up to date', process.execPath, ['build.mjs', '--check'])
-run('FF-1, FF-2, FF-3, FF-6: released versions, dependency rules, no Cyrillic', process.execPath, ['tools/fitness.mjs'])
+run('FF-1, FF-2, FF-3, FF-6, FF-7: released versions, dependency rules, no Cyrillic, approved releases', process.execPath, ['tools/fitness.mjs'])
 
 const probe = spawnSync('claude', ['--version'], { encoding: 'utf8', ...CLAUDE })
 if (probe.status !== 0) {

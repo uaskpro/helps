@@ -32,7 +32,9 @@ Standing rules of the owner (`mgmt.roles-and-decision-rights#R17`):
   the lead may push to this repository, without asking each time, changes to documents, CI and
   tooling, and branches, when the gate is green and a verifier has reviewed the change. A release —
   a version change on `main`, a tag, a GitHub release — and anything else outward still needs the
-  owner's yes for that release, recorded in `project/releases/X.Y.Z.md`.
+  owner's yes for that release, recorded in `project/releases/X.Y.Z.md`. The lead added a limit to
+  itself: a change that removes or loosens a check of the gate (`tools/`, `.github/workflows/`) also
+  waits for the owner's yes.
 
 ## 3. Engineering baseline
 
@@ -106,8 +108,9 @@ One command, the same locally and in CI:
 npm run gate
 ```
 
-It runs the core tests, the build check, FF-1 (a released version is not changed), FF-2/3/6
-(dependency rules, English only) and the mod tests against Claude Code. "Done" means verified:
+It runs the core tests, the build check, FF-1 (a released version is not changed), FF-7 (no
+unapproved version on `main`), FF-2/3/6 (dependency rules, no Cyrillic) and the mod tests against
+Claude Code. "Done" means verified:
 the command and its result in the pull request. Levels, gates and hand checks:
 [project/TEST-STRATEGY.md](project/TEST-STRATEGY.md).
 

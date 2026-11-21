@@ -38,7 +38,7 @@ work waits on a branch until a release.
 
 - Good: a version means one content; any released version can be reinstalled from its tag.
 - Bad / cost: plugin changes wait on a branch until a release.
-- Confirmation: FF-1 (`tools/gate.mjs`).
+- Confirmation: FF-1 and FF-7 (`tools/fitness.mjs`, run by the gate).
 - Follow-up: TD-1 (the version check reads `main`) is harmless while this holds.
 
 ## Evidence

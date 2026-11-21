@@ -6,8 +6,9 @@ owner wrote in another language).
 
 ## Current phase
 
-**Spec** for release 1.0.0 (the foundation run of 2026-11-21 re-founded the product; 0.99.x is in
-Support until 1.0.0 replaces it).
+**Blueprint** (re-foundation of 2026-11-21): G1 waits for the owner's approval of VISION, PRD and
+BLUEPRINT. Release 1.0.0 is prepared on a branch and reaches users only after G1 and G3. 0.99.3 is in
+Support until then.
 
 ## Gates
 
@@ -19,6 +20,20 @@ Support until 1.0.0 replaces it).
 | G1 Blueprint approved | — | owner | waits for the owner's approval of VISION, PRD and BLUEPRINT after the verifier's review |
 | G2 Ready (1.0.0) | — | lead | after G1, against [DEFINITION-OF-READY.md](DEFINITION-OF-READY.md) and the release spec |
 | G3 Go-live (1.0.0) | — | owner | the owner's approval in `releases/1.0.0.md` |
+
+## Gate checklist (every gate)
+
+- [ ] Recall: earlier work that bears on this gate was searched (this file, the ADRs, the release
+      records, the session memory) and is cited.
+- [ ] Record: what the gate decided and learned is written here, in the ADRs or in the release record.
+
+## Open items for the owner
+
+- Turn on private vulnerability reporting: helps on GitHub → Settings → Security → Private
+  vulnerability reporting (SECURITY.md; until then the fallback in SECURITY.md applies).
+- Require the status check `gate` for `main`: Settings → Rules → a branch ruleset for `main` with
+  "Require status checks to pass". Until then SR-1 is the rule that keeps red changes off `main`.
+- G1: approve VISION, PRD and BLUEPRINT. G3: approve release 1.0.0 in `releases/1.0.0.md`.
 
 ## The owner's brief for this foundation run
 
@@ -39,7 +54,7 @@ TEST-STRATEGY §5); the release checklist is the Hub's, kept in this repository
 | 2026-11-09 | the lamp shows this session; the drift check | the brief for helps 0.6.0 | ADR-0005, ADR-0006 |
 | 2026-11-14 | MIT licence; one install channel and the official directory | button "MIT"; "simple and clear for the end user, without workarounds"; button "Yes, prepare it" | ADR-0003, ADR-0004 |
 | 2026-11-21 | tier standard; plan 1 → 2 → 3; appetite 2 agent-days | buttons | this file |
-| 2026-11-21 | ADR-0001 – ADR-0006 accepted | button "accept all six" | each ADR |
+| 2026-11-21 | ADR-0001 – ADR-0006 accepted | button "accept all six"; the question named each decision in one line; the reasons and evidence were written into the ADRs afterwards (commit 92c3ebd) without changing the decisions | each ADR |
 | 2026-11-21 | ADR-0007 accepted | button "Accept" | ADR-0007 |
 | 2026-11-21 | standing rule SR-1 (documents and CI by the lead; a release with the owner's yes) | button "docs and CI by yourself, a release with my yes" | AGENTS.md §2 |
 | 2026-11-21 | publish the tags `v0.5.0` … `v0.99.3` | button "Yes, publish" | this file |

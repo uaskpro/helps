@@ -271,8 +271,8 @@ archives and checksums) → the marketplace serves `main` → installed copies u
 
 | Concern | Concept | Requirements |
 |---|---|---|
-| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand (button or dialog). Writes limited to the data folder and one line per answer. | NFR-1, NFR-2, FR-11, FR-13 |
-| Privacy | Two sends only (drift, version), both switchable, both silent without a visible lamp; secrets masked before the drift check. | NFR-3 |
+| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand (button or dialog). Writes limited to the data folder, one line per answer, and — only when the person runs `helps link` — one command file. | NFR-1, NFR-2, FR-11, FR-13 |
+| Privacy | Two sends only (drift, version), both switchable, both silent without a visible lamp. Secrets are masked in the shell commands sent to the drift check, not in the person's messages or the reply (RK-8, TD-7). | NFR-3 |
 | Accessibility | Colour is never alone: the reason is written; buttons have text labels; terminal and desktop both supported. Not yet verified: contrast in light and dark themes, screen-reader output (TD-4). | NFR-7, NFR-8 |
 | Language | English in the repository and the interface; owner headings and alert prefixes in other languages through `config.json`. | NFR-11, FR-10 |
 | Observability | `helps doctor`; the lamp's Details list what it recorded and when. No telemetry. | FR-18 |
@@ -309,10 +309,11 @@ archives and checksums) → the marketplace serves `main` → installed copies u
 | ID | Protects | Measures | Threshold | Runs | Told on failure | Run locally |
 |---|---|---|---|---|---|---|
 | FF-1 | NFR-12, QS-7 | `git diff` of `plugins/` against the tag of the current version; fails outside a git checkout or without tags | no difference; self-test inside | merge gate (CI, every push) | author of the change (CI) | `node tools/fitness.mjs` |
-| FF-2 | DR-1, DR-2 | forbidden constructs in `src/core.js`, `src/session.js` | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
+| FF-2 | DR-1, DR-2 | forbidden constructs in `src/core.js`, `src/session.js`, line by line (multi-line constructs: TD-8) | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 | FF-3 | DR-3 | runtime dependencies in `package.json` | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 | FF-4 | I-1, QS-1 – QS-5, AC-2 – AC-8 | mod tests against the Claude Code engine | 0 failures | merge gate, Linux + Node 22 | author (CI) | `npm run gate` |
 | FF-5 | DR-4 | build output equals the sources | no difference | merge gate | author (CI) | `node build.mjs --check` |
+| FF-7 | NFR-12, `quality.quality-release#R14` | on `main`, a version without a tag needs `project/releases/<version>.md` with the line `- [x] Approved` | present; self-test inside | merge gate on `main` | author (CI) | `node tools/fitness.mjs` |
 | FF-6 | ADR-0002, NFR-11 | Cyrillic letters in tracked text files (other languages: review) | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 
 ## 11. Risks and technical debt
@@ -346,6 +347,7 @@ Likelihood words: low, medium, high, or "happening now"; severity from the table
 | TD-4 | Contrast and screen-reader output of the band not verified | B-3, NFR-8 | found, not chosen | 3 h | users who rely on them may miss the lamp | before 1.1.0 | lead | 2026-11-21 |
 | TD-5 | FF-4 and FF-5 have no self-test with a broken sample (FF-1, FF-2, FF-3, FF-6 have one) | B-7 | found, not chosen | 2 h | a broken check could pass silently | 1.1.0 | lead | 2026-11-21 |
 | TD-6 | The 6-hour limit of the version check and the two off switches have no test | B-3 | found, not chosen | 1 h | an extra request per session start if broken | 1.1.0 | lead | 2026-11-21 |
+| TD-8 | FF-2 reads line by line: a construct split over lines or hidden in a multi-line template literal can pass | B-7 | found, not chosen | 2 h (parse with a tokenizer) | a breach of DR-1 could pass the gate; review still reads every change | 1.1.0 | lead | 2026-11-21 |
 | TD-7 | Secrets are masked in shell commands but not in the person's messages or the reply sent to the drift check (risk RK-8) | B-3 | found, not chosen | 2 h | a pasted secret can reach the model | 1.1.0 | lead | 2026-11-21 |
 
 ## 12. Glossary

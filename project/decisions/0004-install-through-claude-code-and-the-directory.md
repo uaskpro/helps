@@ -43,7 +43,8 @@ until the listing; the plugin carries what the directory asks (icon, licence, RE
 ## Evidence
 
 - 2026-11-14: on the owner's machine, the desktop app started sessions with `--plugin-dir` pointing at a synced copy of helps without `hooks/`; `/reload-plugins` showed 0 hooks; the lamp was missing.
-- Claude Code documentation on synced plugins (loading, "synced plugins"), read 2026-11-14, says the opposite; reported through `/feedback` by the owner.
+- Claude Code documentation on synced plugins (loading, "synced plugins"), read 2026-11-14, says the opposite; the lead recommended reporting it through `/feedback` (2026-11-14); whether it was
+  reported is not recorded.
 - `claude plugin validate` notes that the directory applies its own rules to hooks modules.
 
 ## Owner decision
