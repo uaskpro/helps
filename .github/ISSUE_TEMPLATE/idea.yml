@@ -1,0 +1,11 @@
+name: An idea
+description: Something helps could do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need, in your own words
+      description: The situation, not the solution. What were you doing when you missed it?
+    validations:
+      required: true

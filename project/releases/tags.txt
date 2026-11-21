@@ -1,0 +1,13 @@
+# Released versions and the commit each was released from. The release workflow creates a tag for
+# any line that has none on GitHub; FF-1 reads this list when the tags are not fetched. Never edit a line.
+v0.5.0 efd2422638944b656dfe7bc049d637ca84cf965d
+v0.5.1 ef3de0f4dfe1a8e943ca235290568e173928ba7e
+v0.5.2 cf1a13fe04daa03cef6a2d881dac77e1574e6db9
+v0.5.3 3bec20da011b76af4b48946a0ff301f8814087da
+v0.6.0 08c88807fd780a9eeae874ab68bdacb40210a45a
+v0.6.1 3d06a9ce0532a9d6e18bbbc0b10e7d1a2d66eb2c
+v0.6.2 c5eb52ea5fa089e5e3ef028a22b23607908af0a3
+v0.99.0 a6c6e9245ffddeef2c4ce186a45f98253df56181
+v0.99.1 685da612cf346d64e79dc560424ed50a55cb1a90
+v0.99.2 4cea0b61adfaef92930e84dd47abb63608c5c55d
+v0.99.3 d4c4662b38669c91ce138c11605ba92dfc5dcd18
