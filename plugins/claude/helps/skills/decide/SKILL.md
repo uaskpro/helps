@@ -16,16 +16,16 @@ helps decisions --json
 Ask questions only through the pop-up with buttons, the AskUserQuestion tool (2–4 options, short labels, the recommended one first and marked as recommended). Do not write the options as chat text.
 
 For each decision, at most 6 at a time:
-1. Retell the project's question in one or two plain sentences, no jargon. Put the project in the title.
-2. Options are the ones the project itself suggests; the one the project recommends goes first, marked as recommended.
-   If the text has no options: "Yes", "No". There is always "Skip"; "Later" means the same.
-3. For the chosen option, write the answer down — the project will see it in its own file. On "Skip" or "Later" write nothing: the question stays open.
+1. Pick the options: the ones the project itself suggests, the one it recommends first; if the text has none,
+   "Yes" and "No". One to three options; helps adds "Skip", and the person may type their own answer.
+2. Let helps ask the person; it shows the project's own question and writes the option they pick:
 
    ```bash
-   helps answer <id> "<the person's answer in plain words>"
+   helps ask <id> --option "<first option>" --option "<second option>"
    ```
 
-4. If a question is stale (the project file is older than 7 days), say so and offer "Skip".
+   Do not ask the question yourself and do not call `helps answer`: helps would ask the person again.
+3. If a question is stale (the project file is older than 7 days), say so before asking.
 
 At the end: "Went through N, M left". Do not decide for the person and do not add questions of your own.
 Write only answers the person gave: an answer goes into the project's file under their name.

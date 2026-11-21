@@ -3,6 +3,34 @@
 All notable changes for users. Versions follow [Semantic Versioning](https://semver.org) against
 the public interface in [docs/INTERFACE.md](docs/INTERFACE.md).
 
+## 1.0.1
+
+Fixes found by two outside reviews of 1.0.0. Nothing to do on update.
+
+- **Security:** in Claude Code, helps now asks you the project's own question itself and writes
+  exactly the option you pick (or what you type). Before, a button answer to any question let a
+  session write any answer to any decision for 30 minutes. A session that writes an answer directly
+  gets helps' own confirmation, with the question and the whole answer.
+- Several sessions saving at the same moment no longer lose ideas, sources or answers: writes take a
+  lock on the data folder (an exclusive lock file in Codex, Gemini and the `helps` command; a queue
+  inside each Claude Code session; a token lock between Claude Code sessions; see the README for the
+  two limits). A lock left by a stopped process is taken over after 5 seconds.
+- On Windows, a file another process has open for a moment no longer fails a save, and a file that
+  cannot be read is never taken for a missing one (which would have replaced it).
+- Two answers to one decision at the same moment: only the first goes in. "Later", "Skip" and a
+  dialog closed with a note only write nothing. helps' question names the folder above the project,
+  so two projects with the same name can be told apart.
+- A decision counts as answered when its answer line is in the project's file.
+- A decision's age counts from when helps first saw it; before, any edit of the file made old
+  questions look new.
+- While paused, helps' own commands that change data are refused too, in every spelling.
+- Outside actions: `gh api` with fields or a GraphQL mutation, `gh pr create`, `gh repo edit`,
+  `gh workflow run`, `gh issue comment`, `gh release upload`, `gh secret set`, joined curl options
+  (`-XPOST`, `-sXPOST`, `-d@file`, `-sd`) and a curl write to a URL in a variable are counted; GraphQL
+  queries and `curl -u user:pw` are not.
+- The README says what green means, what Pause does not stop, and what helps does not guard: answers
+  outside Claude Code, and a session that edits a project's file itself.
+
 ## 1.0.0
 
 The first stable release. Nothing changes in how helps works compared with 0.99.3; what changes is

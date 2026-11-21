@@ -12,10 +12,22 @@ if (!globalThis.crypto) globalThis.crypto = webcrypto
 
 const SELF = fileURLToPath(import.meta.url)
 
+// Windows refuses to create, replace or delete a file another process has open or is deleting
+// (EPERM, EBUSY, EACCES); such a moment passes, so these calls are tried again for a short while.
+const BUSY = new Set(['EPERM', 'EBUSY', 'EACCES'])
+async function patiently(fn) {
+  for (let i = 0; ; i++) {
+    try { return await fn() } catch (err) {
+      if (!err || !BUSY.has(err.code) || i >= 40) throw err
+      await new Promise((resolve) => setTimeout(resolve, 10 + Math.floor(Math.random() * 30)))
+    }
+  }
+}
+
 const io = {
   pathSep: path.delimiter,
   cli: `node "${SELF}"`,
-  read: (p) => fs.readFile(p, 'utf8'),
+  read: (p) => patiently(() => fs.readFile(p, 'utf8')),
   // Whole-file replace through a temporary file, so a crash never leaves half a file. A link is
   // written through, and the file keeps its permissions.
   write: async (p, text) => {
@@ -26,7 +38,7 @@ const io = {
     const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`)
     try {
       await fs.writeFile(tmp, text, { encoding: 'utf8', mode: mode ?? 0o644, flag: 'wx' })
-      await fs.rename(tmp, target)
+      await patiently(() => fs.rename(tmp, target))
     } catch (err) {
       await fs.rm(tmp, { force: true })
       throw err
@@ -46,6 +58,23 @@ const io = {
   },
   env: async (name) => process.env[name],
   now: async () => Date.now(),
+  pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  // The lock: created only if absent, atomically on every local and network file system.
+  createNew: async (p, text) => {
+    await fs.mkdir(path.dirname(p), { recursive: true })
+    try { await fs.writeFile(p, text, { encoding: 'utf8', flag: 'wx' }); return true } catch (err) {
+      if (err && (err.code === 'EEXIST' || BUSY.has(err.code))) return false // held, or still being deleted
+      throw err
+    }
+  },
+  remove: (p) => patiently(() => fs.rm(p, { force: true })),
+  // Taking a stale lock over: only one of several takers can rename it away.
+  rename: async (from, to) => {
+    try { await fs.rename(from, to); return true } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'EPERM' || err.code === 'EACCES')) return false
+      throw err
+    }
+  },
   cwd: async () => process.cwd(),
 }
 

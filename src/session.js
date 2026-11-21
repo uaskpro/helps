@@ -172,6 +172,21 @@ function remote(kind, args) {
 }
 
 const SCRIPT = /(^|[-_.])(merge-task|deploy|provision|release|publish|push)([-_.]|$)/i
+// curl's options that take a value (from curl --help all): the rest of the word, or the next word.
+const CURL_SHORT_VALUE = new Set([...'XdFTuoHAbcCeEKmrwxyYzDPQtU'])
+const CURL_LONG_VALUE = new Set(['--user', '--output', '--header', '--user-agent', '--cookie', '--cookie-jar', '--referer', '--config', '--max-time', '--range', '--write-out', '--proxy', '--connect-timeout', '--cert', '--key', '--cacert', '--resolve', '--retry', '--limit-rate', '--continue-at'])
+const WRITE_METHOD = /^(POST|PUT|PATCH|DELETE)$/i
+// The value of an option given as `-X POST`, `-XPOST`, `--method POST` or `--method=POST`.
+function optionValue(a, names) {
+  for (let i = 0; i < a.length; i++) {
+    for (const n of names) {
+      if (a[i] === n) return a[i + 1] || ''
+      if (n.startsWith('--') && a[i].startsWith(n + '=')) return a[i].slice(n.length + 1)
+      if (!n.startsWith('--') && a[i].startsWith(n) && a[i].length > n.length) return a[i].slice(n.length)
+    }
+  }
+  return ''
+}
 const LOCAL = /\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:\/|$)/
 const base = (p) => String(p || '').replace(/^.*\//, '')
 // The host of a URL, without any user:password@ in front of it.
@@ -194,9 +209,22 @@ function classify(ws, found, depth) {
     if (sub === 'push' && !rest.some((t) => t === '--dry-run' || t === '-n')) found.add('git push')
     else if (sub === 'merge' && !rest.some((t) => ['--abort', '--quit', '--continue'].includes(t))) found.add('git merge')
   } else if (cmd === 'gh') {
-    if (a[0] === 'pr' && a[1] === 'merge') found.add('gh pr merge')
+    if (a[0] === 'pr' && ['merge', 'create'].includes(a[1])) found.add(`gh pr ${a[1]}`)
+    else if (a[0] === 'repo' && ['edit', 'create', 'delete', 'archive', 'rename'].includes(a[1])) found.add(`gh repo ${a[1]}`)
+    else if (a[0] === 'workflow' && a[1] === 'run') found.add('gh workflow run')
+    else if (a[0] === 'issue' && ['create', 'comment', 'close', 'edit', 'delete'].includes(a[1])) found.add(`gh issue ${a[1]}`)
+    else if (a[0] === 'release' && ['upload', 'edit', 'delete'].includes(a[1])) found.add(`gh release ${a[1]}`)
+    else if (a[0] === 'secret' && ['set', 'delete'].includes(a[1])) found.add(`gh secret ${a[1]}`)
     else if (a[0] === 'release' && a[1] === 'create') found.add('gh release')
-    else if (a[0] === 'api' && a.some((t, i) => (t === '-X' || t === '--method') && /^(POST|PUT|PATCH|DELETE)$/i.test(a[i + 1] || ''))) found.add('gh api write')
+    else if (a[0] === 'api') {
+      // gh api sends POST when fields or an input body are given, unless the method says otherwise
+      const method = optionValue(a, ['-X', '--method'])
+      const body = a.some((t) => /^(-f|-F|--field|--raw-field|--input)$/.test(t) || /^(-f|-F).+|^--(field|raw-field|input)=/.test(t))
+      // GraphQL goes by POST either way: only a mutation writes.
+      const graphql = a[1] === 'graphql'
+      const mutation = graphql && a.some((t) => /\bmutation\b/.test(t))
+      if (graphql ? mutation : (WRITE_METHOD.test(method) || (body && !method))) found.add('gh api write')
+    }
   } else if (cmd === 'docker' || cmd === 'podman') {
     if (first === 'push' || (first === 'compose' && a.includes('push'))) found.add(`${cmd} push`)
   } else if (cmd === 'kubectl' || cmd === 'oc') {
@@ -219,11 +247,41 @@ function classify(ws, found, depth) {
     const target = a.find((t) => !t.startsWith('-') && !t.includes('='))
     if (target && SCRIPT.test(target)) found.add(`make ${target}`)
   } else if (cmd === 'curl') {
-    const method = a.find((t, i) => (a[i - 1] === '-X' || a[i - 1] === '--request')) || ''
-    const writes = /^(POST|PUT|PATCH|DELETE)$/i.test(method) ||
-      a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--data(-\w+)?=/.test(t))
-    const url = a.find((t) => /^https?:\/\//.test(t))
-    if (writes && url && !LOCAL.test(url)) found.add(`API write ${hostOf(url)}`)
+    // Short options may be joined (-sXPOST, -sd@body.json); an option that takes a value ends the cluster
+    // and takes the rest, or the next word (-uadmin:pw is a user, not data).
+    let method = ''
+    let data = false
+    let get = false
+    let url = ''
+    for (let i = 0; i < a.length; i++) {
+      const t = a[i]
+      if (t.startsWith('--')) {
+        const [name, val] = t.includes('=') ? [t.slice(0, t.indexOf('=')), t.slice(t.indexOf('=') + 1)] : [t, null]
+        if (name === '--request') method = val ?? a[++i] ?? ''
+        else if (name === '--get') get = true
+        else if (/^--(data(-\w+)?|form(-string)?|json|upload-file)$/.test(name)) { data = true; if (val === null) i++ }
+        else if (name === '--url') url = val ?? a[++i] ?? ''
+        else if (val === null && CURL_LONG_VALUE.has(name)) i++
+        continue
+      }
+      if (t.startsWith('-') && t.length > 1) {
+        for (let k = 1; k < t.length; k++) {
+          const c = t[k]
+          if (c === 'G') get = true
+          if (!CURL_SHORT_VALUE.has(c)) continue
+          const val = t.slice(k + 1) || a[++i] || ''
+          if (c === 'X') method = val
+          if (c === 'd' || c === 'F' || c === 'T') data = true
+          break
+        }
+        continue
+      }
+      if (!url && /^(https?:\/\/|"?\$)/.test(t)) url = t
+    }
+    if (/^(GET|HEAD)$/i.test(method)) get = true
+    const writes = WRITE_METHOD.test(method) || (data && !get)
+    // A URL in a variable cannot be checked against localhost: it counts.
+    if (writes && url && !LOCAL.test(url)) found.add(`API write ${/^https?:/.test(url) ? hostOf(url) : 'unknown host'}`)
   } else if (cmd === 'wget') {
     const url = a.find((t) => /^https?:\/\//.test(t))
     if (url && !LOCAL.test(url) && a.some((t) => /^--(post-data|post-file|method=(POST|PUT|PATCH|DELETE))/i.test(t))) found.add(`API write ${hostOf(url)}`)
@@ -296,8 +354,6 @@ export function newSessionState(now) {
     gen: 0, // bumped when the owner speaks, so a late drift verdict about older work is dropped
     fail: { key: null, count: 0, cmd: '' },
     running: new Map(), // tool_use_id → { cmd, start }: shell commands not finished yet
-    answerCredits: 0, // questions the person answered with buttons and whose answers are not written yet
-    answerCreditsAt: 0,
     paused: false, // the person pressed Pause: tool calls are refused until they speak
     recent: [], // the session's last commands, for the drift check
     lastAnswer: '',
@@ -428,8 +484,18 @@ export function readDrift(text) {
 // What the helps tool may do without asking the person. Reading, and writing the assistant's own data
 // folder (one-line values, checked and capped), always. Writing an answer into a project's state file
 // only when the person has just answered a question with buttons: nobody else may sign for them.
-export function helpsToolNeedsPerson(args, s, now) {
-  if (!Array.isArray(args) || args[0] !== 'answer') return false
-  const fresh = s && s.answerCredits > 0 && now - s.answerCreditsAt <= 30 * 60000
-  return !fresh
+
+// While paused, only a question to the person and helps' own read-only commands may run. `ask` is a
+// question to the person too: helps asks, and writes only what they pick.
+const READ_ONLY = new Set(['status', 'health', 'decisions', 'inbox', 'doctor', 'context', 'scan', '--version', 'ask'])
+export function pauseAllows(tool, args) {
+  if (tool === 'AskUserQuestion') return true
+  if (tool !== 'mcp__helps__run' || !Array.isArray(args) || !args.length) return false
+  const [cmd, ...rest] = args.map(String)
+  const has = (opt) => rest.some((t) => t === opt || t.startsWith(opt + '='))
+  if (READ_ONLY.has(cmd)) return true
+  if (cmd === 'ideas') return !has('--drop')
+  if (cmd === 'focus') return !has('--set')
+  if (cmd === 'sources') return !has('--add')
+  return false
 }

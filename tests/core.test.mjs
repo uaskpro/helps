@@ -1,7 +1,7 @@
 // Tests of the core (through the CLI) and of the built wrappers: npm testcore.test.mjs
 import { test, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -141,14 +141,18 @@ test('drift: green, then yellow, then red', () => {
   assert.equal(health().level, 'red')
 })
 
-test('old decisions are red', () => {
+test('old decisions are red, and editing the file does not make them young', () => {
   const dir = makeProject()
-  setupFocus('--sources-from-scan')
   const old = new Date('2023-11-14T00:00:00Z')
-  fs.utimesSync(path.join(dir, 'STATE.md'), old, old)
-  const h = health()
+  fs.utimesSync(path.join(dir, 'STATE.md'), old, old) // the question was there long before helps looked
+  setupFocus('--sources-from-scan')
+  let h = health()
   assert.equal(h.level, 'red')
   assert.match(h.headline, /decisions waiting/)
+  // an agent edits another part of the file today: the waiting question keeps its age
+  fs.appendFileSync(path.join(dir, 'STATE.md'), '\n## Log\n- worked on something else\n')
+  h = health()
+  assert.equal(h.level, 'red')
 })
 
 test('an alert line wins', () => {
@@ -306,6 +310,37 @@ test('changing the main thing keeps the notes', () => {
   assert.match(text, /project: shop/)
   assert.match(text, /allow: clients/)
   assert.match(text, /a note of the person/)
+})
+
+test('sessions saving ideas at the same moment lose none of them', async () => {
+  setupFocus()
+  const env = { ...process.env, HELPS_DATA: data, HELPS_TODAY: TODAY, HELPS_NOW: '2026-11-10 09:00', HELPS_PROJECT_ROOTS: projects }
+  const failures = []
+  const one = (i) => new Promise((resolve) => {
+    const p = spawn(process.execPath, [CLI, 'idea', `parallel idea ${i}`, '--by', 'claude'], { env })
+    let err = ''
+    p.stderr.on('data', (d) => { err += d })
+    p.on('close', (code) => { if (code) failures.push(`idea ${i}: exit ${code}: ${err.trim()}`); resolve() })
+  })
+  const N = 12
+  for (let round = 0; round < 3; round++) await Promise.all(Array.from({ length: 4 }, (_, k) => one(round * 4 + k)))
+  await Promise.all(Array.from({ length: N }, (_, i) => one(100 + i)))
+  assert.deepEqual(failures, [])
+  const ideas = json(['ideas', '--json']).map((x) => x.text)
+  for (let i = 0; i < 12; i++) assert.ok(ideas.some((t) => t.endsWith(`parallel idea ${i}`)), `idea ${i} lost`)
+  for (let i = 0; i < N; i++) assert.ok(ideas.some((t) => t.endsWith(`parallel idea ${100 + i}`)), `idea ${100 + i} lost`)
+})
+
+test('two answers to one decision at the same moment: one goes in', async () => {
+  const dir = makeProject()
+  setupFocus('--sources-from-scan')
+  const [d] = json(['decisions', '--json'])
+  const env = { ...process.env, HELPS_DATA: data, HELPS_TODAY: TODAY, HELPS_NOW: '2026-11-10 09:00', HELPS_PROJECT_ROOTS: projects }
+  const one = (text) => new Promise((resolve) => { const p = spawn(process.execPath, [CLI, 'answer', d.id, text], { env }); p.on('close', resolve) })
+  await Promise.all(['yes', 'no', 'maybe', 'later'].map(one))
+  const text = fs.readFileSync(path.join(dir, 'STATE.md'), 'utf8')
+  const lines = text.split('\n').filter((l) => l.includes(' → '))
+  assert.equal(lines.length, 1, lines.join('\n'))
 })
 
 test('ideas: save and drop', () => {
@@ -470,6 +505,33 @@ test('outside actions: quotes, heredocs, wrappers and deploy tools', async () =>
   const { outsideAction } = await import('../src/session.js')
   const cases = {
     'ssh -p 22022 root@db1': 'ssh db1',
+    'gh api repos/o/r/issues -f title=x': 'gh api write',
+    'gh api repos/o/r/git/refs -F sha=abc --field ref=refs/tags/v1': 'gh api write',
+    'gh api -XDELETE repos/o/r/git/refs/tags/v1': 'gh api write',
+    'gh api --method=PATCH repos/o/r': 'gh api write',
+    'gh api -X GET search/issues -f q=bug': null,
+    'gh api repos/o/r/releases': null,
+    'curl -XPOST https://api.example.com/v1/items': 'API write api.example.com',
+    'curl --request=PUT https://api.example.com/v1/items/1': 'API write api.example.com',
+    'curl -d@body.json https://api.example.com/v1/items': 'API write api.example.com',
+    'curl -G -d q=x https://api.example.com/search': null,
+    'curl -sS https://api.example.com/v1/items': null,
+    'curl -sXPOST https://api.example.com/v1/items': 'API write api.example.com',
+    'curl -sd x=1 https://api.example.com/v1/items': 'API write api.example.com',
+    'curl -sSL https://example.com/install.sh': null,
+    'gh api graphql -f query=\'query { viewer { login } }\'': null,
+    'gh api graphql -f query=\'mutation { addStar(input: {}) { clientMutationId } }\'': 'gh api write',
+    'gh pr create --fill': 'gh pr create',
+    'gh repo edit --visibility public': 'gh repo edit',
+    'gh workflow run release.yml': 'gh workflow run',
+    'gh pr view 1': null,
+    'curl -uadmin:pw https://api.example.com/v1/items': null,
+    'curl -X POST "$URL"': 'API write unknown host',
+    'curl -H "Authorization: x" -d@a.json https://api.example.com/v1/items': 'API write api.example.com',
+    'curl -o out.html https://example.com/': null,
+    'gh issue comment 5 -b hi': 'gh issue comment',
+    'gh release upload v1 a.zip': 'gh release upload',
+    'gh secret set TOKEN': 'gh secret set',
     'ssh -i ~/.ssh/k git@github.com': null,
     'sftp web1': 'sftp web1',
     'git -C /x -c user.name=a push': 'git push',

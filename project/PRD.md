@@ -1,7 +1,7 @@
 ---
 template: prd/1
-status: approved # by the Product Owner, 2026-11-21 (G1, button "Approve")
-version: 0.2.0
+status: approved # 0.3.0 by the Product Owner, 2026-11-21, with release 1.0.1
+version: 0.3.0
 date: 2026-11-21
 vision: VISION.md 0.2.0
 owner: Product Owner (uaskpro)
@@ -57,14 +57,15 @@ agent sessions are the person's own; some run for hours without them.
 | FR-6 | The lamp MUST turn yellow when the session repeats a failing command 3 times (red at 6). | S-C | done |
 | FR-21 | The lamp MUST turn yellow when one command runs 5 minutes or longer. | S-C | done |
 | FR-22 | The lamp MUST turn yellow at 50 % context use and red at 75 %. | S-C | done |
+| FR-23 | A decision's age MUST count from when helps first saw it (at most the file's last change at that moment); later edits of the file MUST NOT make it younger. | S-D | done (1.0.1) |
 | FR-7 | The drift check MUST ask a small model whether the session still does what the person asked, at most every 3 turns and every 10 minutes, and MAY raise the lamp to yellow, never higher. | S-C | done |
 | FR-8 | A message from the person MUST reset the counters of FR-4, FR-5 and FR-6. | S-C | done |
 | FR-9 | The main thing's own state (decisions waiting, alerts, other projects touched today) MUST appear in grey beside the lamp, with its reasons in Details. | S-C, S-D | done |
 | FR-10 | helps MUST collect decisions as list items under owner headings of listed state files, skip checked items, and present them one at a time with buttons. | S-D | done |
-| FR-11 | An answer MUST be written into the asking file under `## Owner answers (helps)` only after the person chose it with buttons or confirmed it in a dialog; otherwise the write MUST be refused. | S-D | done |
+| FR-11 | In Claude Code, an answer MUST be written into the asking file under `## Owner answers (helps)` only after helps itself asked the person the project's own question (`helps ask`) and wrote exactly what they picked or typed, or after the person confirmed a direct `helps answer` in helps' own dialog that shows the question and the whole answer; otherwise the write MUST be refused. In Codex, Gemini and the `helps` command there is no such dialog (constraint C-1). | S-D | done (1.0.1) |
 | FR-12 | The saved list MUST support keep, drop and make-the-main-thing, and MUST record the date of the review. | S-E | done |
 | FR-13 | A line in a listed state file that starts with an alert prefix MUST turn the lamp to alert and name the project, without passing the line's text to the session as an instruction. | S-F | done |
-| FR-14 | Pause MUST hold every tool call of the session until the person's next message. | S-G | done |
+| FR-14 | Pause MUST refuse every tool call of the session until the person's next message, except questions to the person and helps' own read-only commands; a command already running is not stopped. | S-G | done |
 | FR-15 | Realign MUST send the session the request to re-read its rules, list deviations since the person's last message, and continue, with what the lamp recorded attached; pressing it counts as the person speaking. | S-H | done |
 | FR-16 | helps MUST check for a newer published version at most every 6 hours and show it beside the lamp with how to update. | S-I | done |
 | FR-17 | In Codex CLI and Gemini CLI, a session start MUST give the main thing and the brake as context, and the five skills MUST work through the CLI. | S-J | done (not tried by a person on 0.99) |
@@ -87,6 +88,7 @@ agent sessions are the person's own; some run for hours without them.
 | NFR-9 | maintainability | The core MUST have no runtime dependencies and MUST be shared, unchanged, by the Claude, Codex and Gemini wrappers. |
 | NFR-10 | flexibility | The data folder MUST be movable (`HELPS_DATA`) and shareable between machines and between the three tools. |
 | NFR-11 | licensing | helps MUST be released under the MIT licence, and the repository MUST hold only English text. |
+| NFR-13 | reliability | Several sessions and tools writing to the data folder at the same moment MUST lose no change: an exclusive lock file in the CLI and a queue inside one Claude Code session; between Claude Code sessions a token lock reduces it; a writer that hangs more than 5 s holding the lock can still lose a change (RK-4). An answer MUST be written into a fresh read of the project's file, under the same lock. |
 | NFR-12 | operability | A released version MUST never change; an update or a return to an earlier version MUST be possible from released tags. |
 
 ## Acceptance criteria
@@ -115,11 +117,12 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
   checked boxes are done", "text from files never reaches the session instructions", "an alert line
   wins"; mod "an alert line blinks, and its text stays out of the session…". Expected: decisions and
   alerts reach the band; no file text in the instructions.
-- [ ] **AC-6** (FR-11, NFR-2) Automated: mod "an answer goes into a project only with your hand on it";
+- [ ] **AC-6** (FR-11, NFR-2) Automated: mod "an answer goes into a project only with your hand on it",
+  "helps asks the project's own question and writes only what the person picks";
   core "an answer keeps the file…", "decisions and answers". Expected: refused without the person's
   choice; with it, one line under the answers heading and nothing else changed.
 - [ ] **AC-7** (FR-14, FR-15) Automated: mod "Pause works at once: tool calls are refused until you
-  write", "Realign: the session is told to check itself…". Expected as stated.
+  write" (helps' writes refused too, its reads answer), "Realign: the session is told to check itself…". Expected as stated.
 - [ ] **AC-8** (FR-16, NFR-3) Automated: mod "a newer published version shows beside the lamp…", "nobody
   watching (a script, a cloud session): no model calls, no network…"; core "version comparison for the
   update notice". The 6-hour limit and the two switches are checked by review of `src/register.js`
@@ -145,6 +148,12 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
 - [ ] **AC-18** (NFR-10) Automated: the core tests run with `HELPS_DATA` pointing at a temporary folder
   and find the data there ("setup, scan and sources"). By review: no code path writes data outside
   `HELPS_DATA` (NFR-2).
+- [ ] **AC-20** (NFR-13) Automated: core "sessions saving ideas at the same moment lose none of them"
+  (24 processes, two waves). Expected: every idea is in the file.
+- [ ] **AC-21** (FR-23) Automated: core "old decisions are red, and editing the file does not make them
+  young".
+- [ ] **AC-22** (FR-5) Automated: core "outside actions: quotes, heredocs, wrappers and deploy tools"
+  includes `gh api -f`, `-XDELETE`, `curl -XPOST`, `curl -d@file`, and the GET forms that are not writes.
 - [ ] **AC-19** (NFR-11) Automated: FF-6 (no Cyrillic); `claude plugin validate` reads the manifest;
   by review: `LICENSE` is MIT.
 
@@ -153,6 +162,9 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
 - Constraint: the mod API of Claude Code (`hooks/register.js`) is the only way to draw the band;
   it is documented for plugins and may change (risk RK-1 in the blueprint).
 - Constraint (owner): English only in the repository; no Python (ADR-0001, ADR-0002).
+- C-1: outside Claude Code (Codex CLI, Gemini CLI, a terminal) helps cannot show a dialog of its own, so
+  nothing technical stops a session from writing an answer the person did not give. Nor can any
+  plugin stop a session that edits a project's file itself.
 - Assumption: plugins added on claude.ai keep coming to local sessions without `hooks/`. Check:
   AC-10, after the directory listing, by 2027-03-31; who: the owner.
 

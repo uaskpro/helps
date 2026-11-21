@@ -58,6 +58,7 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   // helps' own confirmation carries its question, which is recorded and answered with calls.reply.
   on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => {
     if (e.afk) return { result: { answers: {}, afkTimeoutMs: 60000 }, text: '' }
+    if (e.answers) return { result: { answers: e.answers }, text: Object.values(e.answers).join(', ') } // the model's question, answered
     const q = e.questions && e.questions[0] && e.questions[0].question
     if (!q) return { result: { answers: { q: 'yes' } }, text: 'yes' }
     calls.asked.push(q)
@@ -102,6 +103,14 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   await $.session.start({ surface, isInteractive: surface !== null, cwd })
   await clock.settle()
   return { clock, toasts, prompts, tools, status, calls, files: d.fs }
+}
+
+// helps takes a lock on its data folder and waits for it on the engine's clock, which a test moves by hand.
+async function drive<T>(clock: any, p: Promise<T>): Promise<T> {
+  let done = false
+  p.then(() => { done = true }, () => { done = true })
+  for (let i = 0; i < 400 && !done; i++) await clock.advance(25)
+  return p
 }
 
 const DATA = '/home/u/helps-data'
@@ -316,7 +325,14 @@ test('Pause works at once: tool calls are refused until you write', async ($, on
   const sub: any = await bash($, 'ls', 'agent-1')
   expect(JSON.stringify(sub)).toContain('pressed Pause')
   const helps = await $.tool.call({ tool: 'mcp__helps__run', args: ['status'] })
-  expect(helps.isError).toBeUndefined() // helps itself still answers
+  expect(helps.isError).toBeUndefined() // helps' read-only commands still answer
+  const write: any = await $.tool.call({ tool: 'mcp__helps__run', args: ['idea', 'x', '--by', 'claude'] })
+  expect(JSON.stringify(write)).toContain('pressed Pause') // but nothing that changes data
+  const drop: any = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '1'] })
+  expect(JSON.stringify(drop)).toContain('pressed Pause')
+  for (const args of [['ideas', '--drop=1'], ['focus', '--set=x'], ['sources', '--add=/x/STATE.md'], ['answer', 'deadbeef', 'yes']]) {
+    expect(JSON.stringify(await $.tool.call({ tool: 'mcp__helps__run', args }))).toContain('pressed Pause')
+  }
   const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await again.find({ key: 'helps-resume' })).toBeDefined()
   expect(await again.find({ key: 'helps-pause' })).toBeUndefined()
@@ -339,12 +355,12 @@ test('in the main thing\'s own session the main-thing buttons come back', async 
 })
 
 test('an answer goes into a project only with your hand on it', async ($, on) => {
-  const { files, calls } = await start($, on, {
+  const { files, calls, clock } = await start($, on, {
     [DATA + '/FOCUS.md']: FOCUS,
     [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
     '/home/u/projects/shop/STATE.md': STATE,
   })
-  const helps = (args: string[]) => $.tool.call({ tool: 'mcp__helps__run', args })
+  const helps = (args: string[]) => drive(clock, $.tool.call({ tool: 'mcp__helps__run', args }))
   const state = () => files.get('/home/u/projects/shop/STATE.md')!.text
   const list = JSON.parse((await helps(['decisions', '--json'])).result)
   // reading, saving an idea, changing the main thing: nobody is asked
@@ -363,16 +379,51 @@ test('an answer goes into a project only with your hand on it', async ($, on) =>
   expect((await helps(['answer', list[0].id, '199 euro'])).isError).toBeUndefined()
   expect(state()).toContain('## Owner answers (helps)\n- 2026-11-10: "Price and payment." → 199 euro')
   expect(calls.asked.length).toBe(2)
-  // the person picked an answer with a button a moment ago: that one answer needs no second question
-  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as any)
-  await helps(['answer', list[1].id, 'atlas'])
-  expect(calls.asked.length).toBe(2)
-  expect(state()).toContain('"Name." → atlas')
+  // a button answer to some other question allows nothing: the next direct write is asked again
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [], answers: { ['Name? (id ' + list[1].id + ')']: 'atlas' } } as any)
+  calls.reply = 'Do not write'
+  expect((await helps(['answer', list[1].id, 'atlas'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(3)
+  expect(calls.asked[2]).toContain('Name.')
+  expect(state()).not.toContain('→ atlas')
+})
+
+test('helps asks the project\'s own question and writes only what the person picks', async ($, on) => {
+  const { files, calls, clock } = await start($, on, {
+    [DATA + '/FOCUS.md']: FOCUS,
+    [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
+    '/home/u/projects/shop/STATE.md': STATE,
+  })
+  const helps = (args: string[]) => drive(clock, $.tool.call({ tool: 'mcp__helps__run', args }))
+  const state = () => files.get('/home/u/projects/shop/STATE.md')!.text
+  const [a] = JSON.parse((await helps(['decisions', '--json'])).result)
+  // the question the person sees is the project's own text, not the session's wording
+  calls.reply = '199 euro'
+  const out = await helps(['ask', a.id, '--option', '199 euro', '--option', '249 euro'])
+  expect(out.isError).toBeUndefined()
+  expect(calls.asked[0]).toContain('Price and payment.')
+  expect(state()).toContain('"Price and payment." → 199 euro')
+  // "Skip" writes nothing
+  const [b] = JSON.parse((await helps(['decisions', '--json'])).result)
+  calls.reply = 'Skip'
+  expect((await helps(['ask', b.id, '--option', 'atlas'])).result).toContain('nothing written')
+  expect(state()).not.toContain('→ atlas')
+  // "Later" offered as an option, or a dialog that comes back with notes only: nothing is written
+  calls.reply = 'Later'
+  expect((await helps(['ask', b.id, '--option', 'atlas', '--option', 'Later'])).result).toContain('nothing written')
+  calls.reply = '(notes only)'
+  expect((await helps(['ask', b.id, '--option', 'atlas'])).result).toContain('nothing written')
+  expect(state()).not.toContain('→ Later')
+  expect(state()).not.toContain('notes only')
+  // no options, or an unknown decision: nothing is asked
+  expect((await helps(['ask', b.id])).isError).toBe(true)
+  expect((await helps(['ask', 'deadbeef', '--option', 'x'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(4)
 })
 
 test('tool: errors come back as plain text', async ($, on) => {
-  await start($, on, {})
-  const r = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '5'] })
+  const { clock } = await start($, on, {})
+  const r = await drive(clock, $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '5'] }))
   expect(r.isError).toBe(true)
   const odd = await $.tool.call({ tool: 'mcp__helps__run', args: ['constructor'] })
   expect(odd.isError).toBe(true)

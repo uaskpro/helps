@@ -39,6 +39,35 @@ const AGENT_CFG = {
   gemini: { helps: 'helps', intro: '', fallback: FALLBACK_PATH },
 }
 
+// How the decide skill asks. In Claude Code helps asks the person itself, with the question's own text from
+// the project's file, and writes exactly the option picked: a session cannot answer in the person's name.
+// Codex and Gemini have no such dialog: there the session asks and writes, on the person's word.
+const DECIDE = {
+  claude: `For each decision, at most 6 at a time:
+1. Pick the options: the ones the project itself suggests, the one it recommends first; if the text has none,
+   "Yes" and "No". One to three options; helps adds "Skip", and the person may type their own answer.
+2. Let helps ask the person; it shows the project's own question and writes the option they pick:
+
+   \`\`\`bash
+   {{HELPS}} ask <id> --option "<first option>" --option "<second option>"
+   \`\`\`
+
+   Do not ask the question yourself and do not call \`{{HELPS}} answer\`: helps would ask the person again.
+3. If a question is stale (the project file is older than 7 days), say so before asking.`,
+  other: `For each decision, at most 6 at a time:
+1. Retell the project's question in one or two plain sentences, no jargon. Put the project in the title.
+2. Options are the ones the project itself suggests; the one the project recommends goes first, marked as recommended.
+   If the text has no options: "Yes", "No". There is always "Skip"; "Later" means the same.
+3. For the chosen option, write the answer down, exactly the option the person picked or exactly what they
+   typed. On "Skip" or "Later" write nothing: the question stays open.
+
+   \`\`\`bash
+   {{HELPS}} answer <id> "<the option they picked, word for word>"
+   \`\`\`
+
+4. If a question is stale (the project file is older than 7 days), say so and offer "Skip".`,
+}
+
 const GEMINI_COMMANDS = {
   setup: ['Set up the assistant in a minute', 'Use the setup skill: set up the assistant with me.'],
   focus: ['What is the main thing now', 'Use the focus skill: show me the main thing now.'],
@@ -63,6 +92,7 @@ function common(dest, agent) {
   const cfg = AGENT_CFG[agent]
   for (const skill of SKILLS) {
     let body = fs.readFileSync(path.join(SRC, 'skills', skill, 'SKILL.md'), 'utf8')
+    body = body.replaceAll('{{DECIDE}}', DECIDE[agent] || DECIDE.other)
     body = body.replaceAll('{{HELPS}}', cfg.helps).replaceAll('{{AGENT}}', agent).replaceAll('{{ASK}}', ASK[agent])
     body = body.replaceAll('{{INTRO}}\n', cfg.intro ? '\n' + cfg.intro + '\n' : '')
     body = body.replaceAll('{{FALLBACK}}\n', cfg.fallback).replaceAll('{{FALLBACK}}', cfg.fallback)
