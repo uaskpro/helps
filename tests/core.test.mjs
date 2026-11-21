@@ -315,13 +315,17 @@ test('changing the main thing keeps the notes', () => {
 test('sessions saving ideas at the same moment lose none of them', async () => {
   setupFocus()
   const env = { ...process.env, HELPS_DATA: data, HELPS_TODAY: TODAY, HELPS_NOW: '2026-11-10 09:00', HELPS_PROJECT_ROOTS: projects }
+  const failures = []
   const one = (i) => new Promise((resolve) => {
     const p = spawn(process.execPath, [CLI, 'idea', `parallel idea ${i}`, '--by', 'claude'], { env })
-    p.on('close', resolve)
+    let err = ''
+    p.stderr.on('data', (d) => { err += d })
+    p.on('close', (code) => { if (code) failures.push(`idea ${i}: exit ${code}: ${err.trim()}`); resolve() })
   })
   const N = 12
   for (let round = 0; round < 3; round++) await Promise.all(Array.from({ length: 4 }, (_, k) => one(round * 4 + k)))
   await Promise.all(Array.from({ length: N }, (_, i) => one(100 + i)))
+  assert.deepEqual(failures, [])
   const ideas = json(['ideas', '--json']).map((x) => x.text)
   for (let i = 0; i < 12; i++) assert.ok(ideas.some((t) => t.endsWith(`parallel idea ${i}`)), `idea ${i} lost`)
   for (let i = 0; i < N; i++) assert.ok(ideas.some((t) => t.endsWith(`parallel idea ${100 + i}`)), `idea ${100 + i} lost`)

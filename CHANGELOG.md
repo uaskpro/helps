@@ -15,6 +15,8 @@ Fixes found by two outside reviews of 1.0.0. Nothing to do on update.
   lock on the data folder (an exclusive lock file in Codex, Gemini and the `helps` command; a queue
   inside each Claude Code session; a token lock between Claude Code sessions; see the README for the
   two limits). A lock left by a stopped process is taken over after 5 seconds.
+- On Windows, a file another process has open for a moment no longer fails a save, and a file that
+  cannot be read is never taken for a missing one (which would have replaced it).
 - Two answers to one decision at the same moment: only the first goes in. "Later", "Skip" and a
   dialog closed with a note only write nothing. helps' question names the folder above the project,
   so two projects with the same name can be told apart.

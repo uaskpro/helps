@@ -132,6 +132,17 @@ async function tryRead(io, path) {
   try { return String(await io.read(path)).replace(/^\uFEFF/, '') } catch { return null }
 }
 
+// For a change: a file that exists but cannot be read now is an error, never "absent" — treating it as
+// absent would write a new file over everything in it.
+async function readForUpdate(io, path) {
+  try { return String(await io.read(path)).replace(/^\uFEFF/, '') } catch (err) {
+    let there = true
+    try { there = await io.exists(path) } catch { /* unknown: assume it is there */ }
+    if (!there) return null
+    throw new Error(`could not read ${path} to change it: ${(err && err.message) || err}`)
+  }
+}
+
 async function isDir(io, path) {
   try { return (await io.stat(path)).kind === 'dir' } catch { return false }
 }
@@ -276,7 +287,7 @@ async function fileLock(ctx, path, fn) {
 const UPDATE_TRIES = 6
 async function updateFile(io, path, apply, present) {
   for (let i = 0; i < UPDATE_TRIES; i++) {
-    const next = apply(await tryRead(io, path))
+    const next = apply(await readForUpdate(io, path))
     if (next === null) return
     await io.write(path, next)
     const back = await tryRead(io, path)
