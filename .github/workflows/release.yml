@@ -3,7 +3,7 @@ name: release
 # project/releases/tags.txt that have no tag yet, and, when the version in package.json has no tag and
 # its record project/releases/<version>.md carries the owner's "- [x] Approved", it reruns the gate,
 # builds the archives and checksums from this commit, tags it vX.Y.Z and creates the GitHub release
-# (quality.quality-release R9, R11, R14, R21; ADR-0007). The gate and the build run with a read-only
+# (quality.quality-release R9, R11, R14, R21; ADR-0007). Tags are made through the GitHub API. The gate and the build run with a read-only
 # token; only the last job, which runs no third-party code, may write.
 on:
   push:
@@ -66,18 +66,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
+      # Tags are created through the GitHub API, never pushed. GitHub refuses the workflow token a tag on
+      # a commit whose .github/workflows differ from the default branch; such a tag is reported with the
+      # command for a person to run, and the release goes on.
       - name: Tags of the versions in the list
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          grep -E '^v[0-9]+\.[0-9]+\.[0-9]+ [0-9a-f]{40}$' project/releases/tags.txt | while read -r tag sha; do
-            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag -a "$tag" "$sha" -m "helps ${tag#v}"
+          missing=""
+          while read -r tag sha; do
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null && continue
+            if gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$sha" >/dev/null; then
+              echo "tagged $tag at $sha"
+            else
+              missing="$missing $tag:$sha"
+            fi
+          done < <(grep -E '^v[0-9]+\.[0-9]+\.[0-9]+ [0-9a-f]{40}$' project/releases/tags.txt)
+          for m in $missing; do
+            echo "::warning::GitHub refused the workflow token the tag ${m%%:*}. Run once: git tag ${m%%:*} ${m#*:} && git push origin ${m%%:*}"
           done
-          git push origin --tags
       - if: needs.build.outputs.release == 'yes'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -85,13 +97,11 @@ jobs:
           path: dist
       - name: Tag and GitHub release
         if: needs.build.outputs.release == 'yes'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ needs.build.outputs.version }}"
-          if ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
-            git tag -a "v$v" "$GITHUB_SHA" -m "helps $v"
-            git push origin "v$v"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            test "$(git rev-parse "v$v^{commit}")" = "$GITHUB_SHA" || { echo "::error::v$v already points elsewhere"; exit 1; }
+            gh release create "v$v" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --verify-tag
+          else
+            gh release create "v$v" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --target "$GITHUB_SHA"
           fi
-          test "$(git rev-parse "v$v^{commit}")" = "$GITHUB_SHA" || { echo "::error::v$v already points elsewhere"; exit 1; }
-          gh release create "v$v" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --verify-tag

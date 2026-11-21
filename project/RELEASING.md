@@ -74,7 +74,13 @@ does not list. Decides: the owner (the lead may roll back at once if a session b
 `v0.5.0` … `v0.99.3` are listed in [releases/tags.txt](releases/tags.txt), each on the last commit
 released under that version (the content users last had under that number); the release workflow
 creates the tags on the first merge into `main` after 2026-11-21. They have no release records or
-archives.
+archives. GitHub refuses the workflow token a tag on a commit whose `.github/workflows/` differ from
+the default branch (`v0.99.0` … `v0.99.3`); the workflow then prints, as a warning, the command a
+person with write access runs once:
+
+```bash
+git tag vA.B.C <commit> && git push origin vA.B.C
+```
 
 ## If the release workflow stops halfway
 
