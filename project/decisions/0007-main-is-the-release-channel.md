@@ -40,6 +40,8 @@ work waits on a branch until a release.
 - Bad / cost: plugin changes wait on a branch until a release.
 - Confirmation: FF-1 and FF-7 (`tools/fitness.mjs`, run by the gate).
 - Follow-up: TD-1 (the version check reads `main`) is harmless while this holds.
+- How it runs (2026-11-21): `main` changes through pull requests the owner merges; on a merge the
+  release workflow tags new approved versions and those listed in `project/releases/tags.txt`.
 
 ## Evidence
 

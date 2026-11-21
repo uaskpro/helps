@@ -106,10 +106,21 @@ if (!selfTest()) failures.push('self-test: a fitness function accepts a broken s
 
 const git = (args) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' })
 const isGit = git(['rev-parse', '--git-dir']).status === 0
-const tags = isGit ? git(['tag', '-l', 'v*']).stdout.split('\n').filter(Boolean) : []
+// Released versions: the git tags, and project/releases/tags.txt (the list the release workflow tags from).
+const listed = new Map()
+const listFile = path.join(ROOT, 'project', 'releases', 'tags.txt')
+if (fs.existsSync(listFile)) {
+  for (const line of fs.readFileSync(listFile, 'utf8').split('\n')) {
+    const m = /^(v\d+\.\d+\.\d+)\s+([0-9a-f]{40})\s*$/.exec(line.trim())
+    if (m) listed.set(m[1], m[2])
+  }
+}
+const gitTags = isGit ? git(['tag', '-l', 'v*']).stdout.split('\n').filter(Boolean) : []
+const tags = [...new Set([...gitTags, ...listed.keys()])]
 const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
-const sameAsTag = isGit && tags.includes(`v${version}`) &&
-  git(['diff', '--quiet', `v${version}`, '--', 'plugins', '.claude-plugin', '.agents']).status === 0
+const ref = gitTags.includes(`v${version}`) ? `v${version}` : listed.get(`v${version}`)
+const sameAsTag = isGit && !!ref &&
+  git(['diff', '--quiet', ref, '--', 'plugins', '.claude-plugin', '.agents']).status === 0
 failures.push(...ff1({ isGit, tags, version, sameAsTag }))
 
 const branch = process.env.GITHUB_BASE_REF || (process.env.GITHUB_REF || '').replace(/^refs\/heads\//, '') ||

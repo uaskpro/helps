@@ -251,9 +251,9 @@ Environments: **production** is the person's computer above. **CI** (GitHub Acti
 Windows × Node 18, 22) runs the gate. **Local** is a developer's checkout. There is no staging:
 a release candidate is tried by hand in a clean Claude Code configuration (TEST-STRATEGY §5).
 
-Delivery path: change → gate → `main` (docs) or release branch → release (tag `vX.Y.Z`, CI builds
-archives and checksums) → the marketplace serves `main` → installed copies update on a new version
-([RELEASING.md](RELEASING.md)).
+Delivery path: change → gate → a branch → a pull request the owner merges into `main` → for a new
+approved version, the release workflow tags it and builds archives and checksums → the marketplace
+serves `main` → installed copies update on a new version ([RELEASING.md](RELEASING.md)).
 
 ### Operability block
 
@@ -308,7 +308,7 @@ archives and checksums) → the marketplace serves `main` → installed copies u
 
 | ID | Protects | Measures | Threshold | Runs | Told on failure | Run locally |
 |---|---|---|---|---|---|---|
-| FF-1 | NFR-12, QS-7 | `git diff` of `plugins/` against the tag of the current version; fails outside a git checkout or without tags | no difference; self-test inside | merge gate (CI, every push) | author of the change (CI) | `node tools/fitness.mjs` |
+| FF-1 | NFR-12, QS-7 | `git diff` of `plugins/` against the tag of the current version, or its commit in `project/releases/tags.txt`; fails outside a git checkout or with no released version known | no difference; self-test inside | merge gate (CI, every push) | author of the change (CI) | `node tools/fitness.mjs` |
 | FF-2 | DR-1, DR-2 | forbidden constructs in `src/core.js`, `src/session.js`, line by line (multi-line constructs: TD-8) | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 | FF-3 | DR-3 | runtime dependencies in `package.json` | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 | FF-4 | I-1, QS-1 – QS-5, AC-2 – AC-8 | mod tests against the Claude Code engine | 0 failures | merge gate, Linux + Node 22 | author (CI) | `npm run gate` |

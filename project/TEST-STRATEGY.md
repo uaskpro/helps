@@ -43,9 +43,10 @@ by the written rule in AGENTS.md §6).
 ## 4. Pipeline
 
 1. Push or pull request → GitHub Actions run G1 on ubuntu, macos, windows × Node 18, 22.
-2. Release commit on `main` (version, CHANGELOG, `project/releases/X.Y.Z.md`) → G1 again.
-3. Owner approval in the release record → tag `vX.Y.Z` → the release workflow reruns the gate,
-   builds the three archives from the tag, records SHA-256 checksums, creates the GitHub release.
+2. Release branch with the version, CHANGELOG and `project/releases/X.Y.Z.md`; the owner's approval
+   in the record; a pull request into `main` runs G1 with FF-7.
+3. The owner merges → the release workflow reruns the gate, builds the three archives from the merge
+   commit, records SHA-256 checksums, tags `vX.Y.Z` and creates the GitHub release.
 4. G3 by the lead; the record is completed in `project/releases/X.Y.Z.md`.
 
 ## 5. Environments

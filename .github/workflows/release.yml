@@ -1,15 +1,24 @@
 name: release
-# A pushed tag vX.Y.Z becomes a GitHub release (quality.quality-release R9, R11, R21). The owner approves
-# first, in project/releases/X.Y.Z.md; the tag is pushed only after that. The gate and the build run with a
-# read-only token; only the last job, which runs no third-party code, may write.
+# Runs on every push to main (a merged pull request). It tags the released versions listed in
+# project/releases/tags.txt that have no tag yet, and, when the version in package.json has no tag and
+# its record project/releases/<version>.md carries the owner's "- [x] Approved", it reruns the gate,
+# builds the archives and checksums from this commit, tags it vX.Y.Z and creates the GitHub release
+# (quality.quality-release R9, R11, R14, R21; ADR-0007). The gate and the build run with a read-only
+# token; only the last job, which runs no third-party code, may write.
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.what.outputs.release }}
+      version: ${{ steps.what.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -18,42 +27,64 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: The tag is on main and matches the version
+      - name: Is this a new approved version?
+        id: what
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-          test "$(node -p "require('./package.json').version")" = "$v"
+          v="$(node -p "require('./package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null || grep -q "^v$v " project/releases/tags.txt; then
+            echo "release=no" >> "$GITHUB_OUTPUT"; echo "v$v is already released"; exit 0
+          fi
           grep -q "VERSION = '$v'" src/core.js
           grep -q "^## $v\$" CHANGELOG.md
           grep -q "^- \[x\] Approved" "project/releases/$v.md"
-      - run: npm install -g @anthropic-ai/claude-code@2.1.321
-      - run: npm run gate
+          echo "release=yes" >> "$GITHUB_OUTPUT"
+      - if: steps.what.outputs.release == 'yes'
+        run: npm install -g @anthropic-ai/claude-code@2.1.321
+      - if: steps.what.outputs.release == 'yes'
+        run: npm run gate
       - name: Archives and checksums
+        if: steps.what.outputs.release == 'yes'
         run: |
-          v="${GITHUB_REF_NAME#v}"
+          v="${{ steps.what.outputs.version }}"
           mkdir dist
           for t in claude codex gemini; do (cd "plugins/$t" && zip -qr "../../dist/helps-$v-$t.zip" helps); done
           (cd dist && sha256sum *.zip > SHA256SUMS)
-          { awk -v v="## $v" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md; echo; echo "Commit: $GITHUB_SHA"; } > dist/NOTES.md
+          { awk -v h="## $v" '$0==h{f=1;next} /^## /{f=0} f' CHANGELOG.md; echo; echo "Commit: $GITHUB_SHA"; } > dist/NOTES.md
           cat dist/SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - if: steps.what.outputs.release == 'yes'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
-  release:
+  publish:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Tags of the versions in the list
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          grep -E '^v[0-9]+\.[0-9]+\.[0-9]+ [0-9a-f]{40}$' project/releases/tags.txt | while read -r tag sha; do
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag -a "$tag" "$sha" -m "helps ${tag#v}"
+          done
+          git push origin --tags
+      - if: needs.build.outputs.release == 'yes'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist
-      - name: GitHub release
+      - name: Tag and GitHub release
+        if: needs.build.outputs.release == 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" \
-            --title "helps ${GITHUB_REF_NAME#v}" --notes-file dist/NOTES.md --verify-tag
+          v="${{ needs.build.outputs.version }}"
+          git tag -a "v$v" "$GITHUB_SHA" -m "helps $v"
+          git push origin "v$v"
+          gh release create "v$v" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --verify-tag

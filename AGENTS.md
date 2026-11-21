@@ -85,9 +85,10 @@ assets/         icon and screenshots
 
 - `main` is the release channel (ADR-0007). The built plugin (`plugins/`, the marketplaces) changes
   on `main` only in a release commit; FF-1 fails otherwise. Plugin work happens on a branch
-  `feat/<topic>` or `fix/<topic>`; documents, CI and tooling may go to `main` directly under SR-1
-  (gate green and reviewed before the push). Until the owner turns on a required status check for
-  `main` on GitHub, this order is the rule that keeps red changes off `main`.
+  `feat/<topic>` or `fix/<topic>`. Agents push branches only (under SR-1, gate green and reviewed);
+  `main` changes through a pull request that the owner merges, and tags are made by the release
+  workflow, never by hand. A required status check `gate` on `main` (an owner setting) makes a red
+  merge impossible; until it is on, the owner merges only on green.
 - Commits and pull request titles follow Conventional Commits (`feat(lamp): …`, `fix(decide): …`,
   `docs: …`, `ci: …`); breaking changes are marked `!`.
 - A change is merged only when it meets [project/DEFINITION-OF-DONE.md](project/DEFINITION-OF-DONE.md)

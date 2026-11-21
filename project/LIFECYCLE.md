@@ -34,6 +34,7 @@ Support until then.
 - Require the status check `gate` for `main`: Settings → Rules → a branch ruleset for `main` with
   "Require status checks to pass". Until then SR-1 is the rule that keeps red changes off `main`.
 - G1: approve VISION, PRD and BLUEPRINT. G3: approve release 1.0.0 in `releases/1.0.0.md`.
+- Merge the pull request `release/1.0.0` → `main` (this session cannot push `main` or tags).
 
 ## The owner's brief for this foundation run
 

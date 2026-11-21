@@ -24,11 +24,12 @@ doubt, MAJOR. A released version never changes; FF-1 enforces it.
 5. **Gate.** `npm run gate` green on the release commit; the G2 hand checks of
    [TEST-STRATEGY.md](TEST-STRATEGY.md) §6 done and recorded.
 6. **Approval.** The owner approves against the record (section 6 of it, the line
-   `- [x] Approved …`), with the date. A green pipeline alone is not an approval; the release workflow
-   refuses a tag without that line.
-7. **Publish.** Merge `release/X.Y.Z` into `main` (fast-forward), push, then push the tag `vX.Y.Z`
-   on that commit. The release workflow builds the archives and checksums and creates the GitHub
-   release; copy the checksums into the record.
+   `- [x] Approved …`), with the date. A green pipeline alone is not an approval: FF-7 keeps an
+   untagged version off `main` without that line.
+7. **Publish.** Open a pull request from `release/X.Y.Z` into `main`; the owner merges it. On the merge
+   the release workflow reruns the gate, builds the archives and checksums from that commit, tags it
+   `vX.Y.Z` and creates the GitHub release. Copy the checksums into the record in the next documents
+   change. Agents do not push to `main` or push tags.
 8. **Verify (G3).** Clean configuration: install from the marketplace, new session, the band shows,
    `helps doctor` prints X.Y.Z. Record the result and close the record.
 
@@ -68,6 +69,8 @@ does not list. Decides: the owner (the lead may roll back at once if a session b
 
 ## Tags of earlier versions
 
-`v0.5.0` … `v0.99.3` were set on 2026-11-21, each on the last commit released under that version
-(the content users last had under that number). They have no release records or archives.
+`v0.5.0` … `v0.99.3` are listed in [releases/tags.txt](releases/tags.txt), each on the last commit
+released under that version (the content users last had under that number); the release workflow
+creates the tags on the first merge into `main` after 2026-11-21. They have no release records or
+archives.
   Data in `~/helps-data` is kept across versions; nothing to restore.
