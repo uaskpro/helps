@@ -5,8 +5,7 @@ only as the version says: a **breaking** change only in a MAJOR version, an addi
 deprecation in a MINOR, fixes in a PATCH. A deprecated item keeps working for at least one MINOR
 release. Everything not listed here is internal and may change in any release.
 
-Status of this document: draft for helps 1.0.0. Until 1.0.0 is released (helps 0.99.x), it describes
-the current behaviour, and changes may still be made without a MAJOR version.
+Version of this document: 1.0.0, with helps 1.0.0.
 
 ## 1. What is public, in short
 

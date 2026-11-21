@@ -3,7 +3,10 @@
 All notable changes for users. Versions follow [Semantic Versioning](https://semver.org) against
 the public interface in [docs/INTERFACE.md](docs/INTERFACE.md).
 
-## Unreleased
+## 1.0.0
+
+The first stable release. Nothing changes in how helps works compared with 0.99.3; what changes is
+the promise: from now on the version number says what an update can break.
 
 - The public interface is written down: data files, settings, state-file conventions, commands and
   their JSON output ([docs/INTERFACE.md](docs/INTERFACE.md)). From 1.0.0 it changes only as the

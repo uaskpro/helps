@@ -1,9 +1,5 @@
 # helps
 
-> [!WARNING]
-> **RELEASE CANDIDATE 0.99 — IN FINAL TESTING BEFORE 1.0.**
-> **IT WORKS, BUT DETAILS MAY STILL CHANGE. PLEASE REPORT WHAT BREAKS.**
-
 An assistant for Claude Code, with lighter versions for Codex CLI and Gemini CLI. It keeps one main
 thing in front of you, saves everything else for later, goes through the decisions waiting in your
 projects with you, and puts a lamp on every Claude Code session that shows how that session is
