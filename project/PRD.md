@@ -1,9 +1,9 @@
 ---
 template: prd/1
-status: review   # draft | review | approved — the Product Owner approves
-version: 0.1.0
+status: draft    # draft until the vision is approved (mgmt.project-foundation R2), then review
+version: 0.2.0
 date: 2026-11-21
-vision: VISION.md 0.1.0
+vision: VISION.md 0.2.0
 owner: Product Owner (uaskpro)
 ---
 
@@ -49,14 +49,16 @@ agent sessions are the person's own; some run for hours without them.
 
 | ID | Requirement | Scenario | State |
 |---|---|---|---|
-| FR-1 | Setup MUST save the main thing and its "done" text and MUST list the `STATE.md` files of projects found from the current folder and its parent, in under one minute of the person's time. | S-A | done |
+| FR-1 | Setup MUST save the main thing and its "done" text and MUST list the `STATE.md` files of projects found in the project folders (`docs/INTERFACE.md` §4, `HELPS_PROJECT_ROOTS`), in under one minute of the person's time. | S-A | done |
 | FR-2 | When a request pulls away from the main thing and is not of a kind the person allowed, the session MUST save its gist for later and offer "back to the main thing" and "do it now" before starting it, once per piece of work. | S-B | done |
 | FR-3 | Each Claude Code session MUST show a band above the prompt with a lamp (green, yellow, red, alert), the top reason and Details. | S-C | done |
 | FR-4 | The lamp MUST turn yellow at 30 and red at 120 minutes of work without the person (defaults). | S-C | done |
 | FR-5 | The lamp MUST count outside actions (ssh, scp, rsync, push, merge, deploy, provisioning, API writes) only in turns the session started itself, yellow at 1 and red at 3 (defaults), and MUST list each action with its time in Details. | S-C | done |
-| FR-6 | The lamp MUST turn yellow when the session repeats a failing command 3 times or a command runs 5 minutes or longer, and when context use reaches 50 % (red at 75 %). | S-C | done |
+| FR-6 | The lamp MUST turn yellow when the session repeats a failing command 3 times (red at 6). | S-C | done |
+| FR-21 | The lamp MUST turn yellow when one command runs 5 minutes or longer. | S-C | done |
+| FR-22 | The lamp MUST turn yellow at 50 % context use and red at 75 %. | S-C | done |
 | FR-7 | The drift check MUST ask a small model whether the session still does what the person asked, at most every 3 turns and every 10 minutes, and MAY raise the lamp to yellow, never higher. | S-C | done |
-| FR-8 | A message from the person MUST reset the counters of FR-4 to FR-6. | S-C | done |
+| FR-8 | A message from the person MUST reset the counters of FR-4, FR-5 and FR-6. | S-C | done |
 | FR-9 | The main thing's own state (decisions waiting, alerts, other projects touched today) MUST appear in grey beside the lamp, with its reasons in Details. | S-C, S-D | done |
 | FR-10 | helps MUST collect decisions as list items under owner headings of listed state files, skip checked items, and present them one at a time with buttons. | S-D | done |
 | FR-11 | An answer MUST be written into the asking file under `## Owner answers (helps)` only after the person chose it with buttons or confirmed it in a dialog; otherwise the write MUST be refused. | S-D | done |
@@ -75,8 +77,8 @@ agent sessions are the person's own; some run for hours without them.
 | ID | Quality attribute (ISO/IEC 25010) | Requirement |
 |---|---|---|
 | NFR-1 | security | Text read from project files MUST NOT be placed into a session's instructions; at most "an alert line in project X". Verified by mod tests. |
-| NFR-2 | security | helps MUST write only its data folder and, per FR-11, one line into a listed state file. |
-| NFR-3 | security (privacy) | Only two things MUST leave the machine: the drift check (last 3 messages of the person, the last reply, the last 12 shell commands with secrets masked, sent through the person's own Claude Code account) and the version check (a GET of helps' own `plugin.json` on GitHub). Both MUST be switchable off, and neither MUST run while no lamp is visible. |
+| NFR-2 | security | helps MUST write only: its data folder; per FR-11, one line into a listed state file (the CLI writes a temporary file beside it and renames it over the original); and, only when the person runs `helps link`, one command file in the folder they name. |
+| NFR-3 | security (privacy) | Nothing MUST leave the machine except the drift check (the person's last 3 messages and the last reply, as written, and the last 12 shell commands with secrets masked, sent through the person's own Claude Code account) and the version check (a GET of helps' own `plugin.json` on GitHub). Both MUST be switchable off, and neither MUST run while no lamp is visible. |
 | NFR-4 | reliability | A failure inside helps MUST NOT stop or break the session: the session goes on without a lamp. |
 | NFR-5 | performance efficiency | The drift check MUST time out after 30 s and request at most 150 output tokens; the main thing's state is recomputed at most every 5 minutes. |
 | NFR-6 | compatibility | The mod MUST work with Claude Code 2.1.321 or newer in the terminal and the desktop app on Linux, macOS and Windows; the CLI MUST work with Node 18 or newer. |
@@ -89,39 +91,61 @@ agent sessions are the person's own; some run for hours without them.
 
 ## Acceptance criteria
 
-Method, environment, expected result and who performs each. "Automated" criteria run in the gate
-(`npm run gate`, [TEST-STRATEGY.md](TEST-STRATEGY.md)).
+Each names the ids it proves, the method, the environment, the expected result and who performs it.
+"Automated" means a test in the gate (`npm run gate`, [TEST-STRATEGY.md](TEST-STRATEGY.md)); the test is
+named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test.ts`).
 
-- [ ] **AC-1** (FR-1) Clean configuration, empty data folder, a folder with two projects that have
-  `STATE.md`: "set up helps", answer the questions. Expected: `FOCUS.md` written, both state files
-  listed, finished within 60 s of the person's time. Environment: Claude Code terminal, Linux.
-  Performed by: the lead before each MINOR or MAJOR release.
-- [ ] **AC-2** (FR-2) Automated: a request outside the main thing produces the idea record and the
-  two buttons once per piece of work; a follow-up does not ask again.
-- [ ] **AC-3** (FR-3, FR-19, NFR-8) Automated: the band renders in each layout and size with a
-  colour and a written reason. By hand: the band is visible in the terminal and in the desktop
-  app. Performed by: the lead (terminal) and the owner (desktop app) before each release.
-- [ ] **AC-4** (FR-4 – FR-8) Automated: each threshold raises the lamp to the stated colour, a
-  message of the person resets it, outside actions in the person's turns are not counted.
-- [ ] **AC-5** (FR-9, FR-10, FR-13) Automated: decisions and alerts from listed files reach the
-  band and Details; checked items are skipped; alert text is not in the session's instructions.
-- [ ] **AC-6** (FR-11, NFR-2) Automated: an answer without the person's choice is refused; with it,
-  one line is written under the answers heading and nothing else changes in the file.
-- [ ] **AC-7** (FR-14, FR-15) Automated: Pause holds tool calls until the person writes; Realign
-  sends the request with the lamp's record.
-- [ ] **AC-8** (FR-16, NFR-3) Automated: the version check runs at most every 6 h and not with
-  `update_check: false` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`; the drift check is off with
-  `drift_check: false`; nothing is sent without a visible lamp.
-- [ ] **AC-9** (FR-17) By hand on the release candidate: Codex CLI and Gemini CLI start a session
-  with the main thing in context. Performed by: the lead. Until it is done, the release notes say
-  "not tried by a person".
-- [ ] **AC-10** (FR-20, O-5) After listing: install from the directory into a clean configuration;
-  the lamp shows in a new session. Performed by: the owner.
-- [ ] **AC-11** (NFR-4) Automated: broken data at session start, and an error in helps' own tool,
-  leave the session working (the tool answers in plain text). A general test that an exception in
-  any handler is contained is missing: TD-2 in the blueprint.
-- [ ] **AC-12** (NFR-12) The gate's FF-1 passes: the built plugin under a released version equals
-  its tag.
+- [ ] **AC-1** (FR-1) By hand: clean configuration, empty data folder, a folder with two projects that
+  have `STATE.md`: "set up helps", answer the questions. Expected: `FOCUS.md` written, both state files
+  listed, finished within 60 s of the person's time. Environment: Claude Code terminal, Linux. By: the
+  lead, before each MINOR or MAJOR release. Automated part: core "setup, scan and sources".
+- [ ] **AC-2** (FR-2) Automated: core "not set up: offers setup with buttons", "set up: the main thing and
+  the way out"; mod "changing the main thing updates the session's instructions". Expected: the brake rule and the two buttons
+  are in the session's instructions.
+- [ ] **AC-3** (FR-3, FR-19, NFR-8) Automated: mod "a calm session is green and names itself…", "out of
+  the box the band is small and short…", "the band's look is a setting…". Expected: a colour and a
+  written reason in every layout. By hand: the band is visible in the terminal (lead) and in the desktop
+  app (owner) before each release.
+- [ ] **AC-4** (FR-4 – FR-8, FR-21, FR-22) Automated: mod "outside actions on its own…", "in reply to you
+  an outside action is yours…", "hours inside the turn you asked for are fine…", "stuck: the same
+  command failing…", "a full context window is red", "drift check: yellow with the reason, never red",
+  "your message starts the count over"; core "the session lamp: thresholds, worst first, drift never
+  red", "outside actions: …". Expected: each threshold gives its colour; the person's message resets.
+- [ ] **AC-5** (FR-9, FR-10, FR-13, NFR-1) Automated: core "owner items: code blocks are not headings,
+  checked boxes are done", "text from files never reaches the session instructions", "an alert line
+  wins"; mod "an alert line blinks, and its text stays out of the session…". Expected: decisions and
+  alerts reach the band; no file text in the instructions.
+- [ ] **AC-6** (FR-11, NFR-2) Automated: mod "an answer goes into a project only with your hand on it";
+  core "an answer keeps the file…", "decisions and answers". Expected: refused without the person's
+  choice; with it, one line under the answers heading and nothing else changed.
+- [ ] **AC-7** (FR-14, FR-15) Automated: mod "Pause works at once: tool calls are refused until you
+  write", "Realign: the session is told to check itself…". Expected as stated.
+- [ ] **AC-8** (FR-16, NFR-3) Automated: mod "a newer published version shows beside the lamp…", "nobody
+  watching (a script, a cloud session): no model calls, no network…"; core "version comparison for the
+  update notice". The 6-hour limit and the two switches are checked by review of `src/register.js`
+  (TD-6). Expected: no send without a visible lamp.
+- [ ] **AC-9** (FR-17) By hand on the release candidate: Codex CLI and Gemini CLI start a session with
+  the main thing in context. By: the lead. Until it is done, the release notes say "not tried by a
+  person".
+- [ ] **AC-10** (FR-20, O-5) By hand after listing: install from the directory into a clean
+  configuration; the lamp shows in a new session. By: the owner.
+- [ ] **AC-11** (NFR-4) Automated: core "the session start survives broken data"; mod "tool: errors come
+  back as plain text". A general test that an exception in any mod handler is contained is missing (TD-2).
+- [ ] **AC-12** (NFR-12) Automated: FF-1 passes: the built plugin under a released version equals its tag.
+- [ ] **AC-13** (FR-12) Automated: core "ideas: save and drop", "a review is offered a week after the
+  first idea…". Expected: drop moves the line to `IDEAS-done.md`; the review date is recorded.
+- [ ] **AC-14** (FR-18) By hand: "run helps doctor" in a terminal session prints the version, the data
+  folder and the surfaces. By: the lead, each release.
+- [ ] **AC-15** (NFR-5) By review of `src/register.js`: the drift call has `maxTokens: 150` and a 30 s
+  timeout; the main thing's state is cached for 5 minutes. By: the verifier of each change to it.
+- [ ] **AC-16** (NFR-6, NFR-9) Automated: the gate on 6 CI jobs (Linux, macOS, Windows × Node 18, 22)
+  and FF-4 on Claude Code 2.1.321; FF-2, FF-3. Expected: all green.
+- [ ] **AC-17** (NFR-7) By review: every question the skills ask is an AskUserQuestion with 2–4 options,
+  the recommended first. By: the verifier of each change to `src/skills/`.
+- [ ] **AC-18** (NFR-10) Automated: core "setup, scan and sources" runs with `HELPS_DATA` set to a
+  temporary folder. Expected: nothing written outside it.
+- [ ] **AC-19** (NFR-11) Automated: FF-6 (no Cyrillic); `claude plugin validate` reads the manifest;
+  by review: `LICENSE` is MIT.
 
 ## Constraints and assumptions
 
@@ -129,14 +153,20 @@ Method, environment, expected result and who performs each. "Automated" criteria
   it is documented for plugins and may change (risk RK-1 in the blueprint).
 - Constraint (owner): English only in the repository; no Python (ADR-0001, ADR-0002).
 - Assumption: plugins added on claude.ai keep coming to local sessions without `hooks/`. Check:
-  after the directory listing (AC-10).
+  AC-10, after the directory listing, by 2027-03-31; who: the owner.
 
 ## Out of scope
 
-- Telemetry, accounts, a server, a web or mobile interface of its own (vision non-goals).
-- A lamp in cloud sessions: the cloud session has no surface for it.
+Not goals of the product (from the vision's non-goals):
+
+- Telemetry, accounts, a server, a web or mobile interface of its own.
 - Teams and shared dashboards; task tracking beyond one main thing and a list for later.
-- Installing through claude.ai **Customize → Plugins** until the directory listing (ADR-0004).
+
+Deferred, not in 1.0.0:
+
+- A lamp in cloud sessions: the cloud session gives a mod no surface today. Revisit when it does.
+- Installing through claude.ai **Customize → Plugins**: after the directory listing (ADR-0004, AC-10).
+- Checked support for VS Code and the mobile app: 1.1.0 (roadmap M3).
 
 ## Open questions
 

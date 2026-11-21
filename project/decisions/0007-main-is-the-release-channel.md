@@ -3,15 +3,15 @@ id: ADR-0007
 title: main is the release channel
 status: accepted
 date: 2026-11-21
-deciders: lead
-owner-level: no
+deciders: Product Owner
+owner-level: yes
 supersedes: ~
 superseded_by: ~
 ---
 
 # ADR-0007: `main` is the release channel
 
-Owner-level: no · Decision-makers: lead (decides and logs, `mgmt.roles-and-decision-rights#R10`)
+Owner-level: yes (how and when users receive content) · Decision-makers: Product Owner (accepts), lead (proposes)
 
 ## Context and problem
 
@@ -30,7 +30,9 @@ the next bump, and no earlier version could be installed again. Serves NFR-12.
 
 ## Decision
 
-Option 1. FF-1 in the gate fails when `plugins/` differs from the tag of the current version.
+Option 1. It keeps one install path for users and for the directory (the default branch), makes a
+version mean one content, and lets any released version be installed again from its tag, while plugin
+work waits on a branch until a release.
 
 ## Consequences
 
@@ -39,6 +41,12 @@ Option 1. FF-1 in the gate fails when `plugins/` differs from the tag of the cur
 - Confirmation: FF-1 (`tools/gate.mjs`).
 - Follow-up: TD-1 (the version check reads `main`) is harmless while this holds.
 
+## Evidence
+
+- Until 0.99.3 the version was raised with every push and no tag existed (git history, 2026-11-21).
+- Reinstalling v0.99.2 from its tag into a clean configuration worked on 2026-11-21 (`claude plugin marketplace add` of a local checkout of the tag, then `claude plugin install helps@uaskpro-helps`).
+
 ## Owner decision
 
-Not owner-level. Accepted by the lead on 2026-11-21 and logged in the release record of 1.0.0.
+Proposed by the lead on 2026-11-21; first written as a lead-level decision, raised to owner-level by
+the verifier's review. Accepted by the Product Owner on 2026-11-21 with a button ("Accept").

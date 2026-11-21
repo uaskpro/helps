@@ -24,7 +24,8 @@ The ranked goals QG-1 – QG-5 of [BLUEPRINT.md](BLUEPRINT.md) §1.
 | System integration | a real Claude Code session with the plugin; Codex CLI and Gemini CLI | by hand (section 6) | release candidate | G2 |
 | Acceptance | AC-1 – AC-12 of the PRD | tests + hand checks + the owner | release candidate | G2 |
 
-Static checks: `claude plugin validate`, FF-2, FF-3, FF-6 (`tools/fitness.mjs`), FF-5 (`build.mjs --check`) — G1.
+Static checks: `claude plugin validate`, FF-1, FF-2, FF-3, FF-6 (`tools/fitness.mjs`, each with a self-test),
+FF-5 (`build.mjs --check`) — G1. Two core tests that check Unix file permissions are skipped on Windows.
 Regression: every gate reruns the whole suite; every escaped defect adds a test at the lowest level
 that reproduces it.
 
@@ -61,7 +62,7 @@ by the written rule in AGENTS.md §6).
 | Path | Check | Automated? |
 |---|---|---|
 | Install from the marketplace → new session → band visible | clean configuration, terminal: `/plugin install helps --marketplace uaskpro/helps`, new session, the band shows | no (G2, G3) |
-| Setup → main thing saved → green lamp | AC-1 | partly (mod test "set up: the main thing…") |
+| Setup → main thing saved → green lamp | AC-1 | partly (core tests "setup, scan and sources", "set up: the main thing and the way out") |
 | New unrelated work → saved for later + two buttons | AC-2 | yes |
 | Decision → button → one line in STATE.md | AC-6 | yes |
 | Outside action in an own turn → yellow | AC-4 | yes |

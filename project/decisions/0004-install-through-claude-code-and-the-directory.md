@@ -1,7 +1,7 @@
 ---
 id: ADR-0004
 title: Install through Claude Code; the official directory for end users
-status: proposed
+status: accepted
 date: 2026-11-21
 deciders: Product Owner
 owner-level: yes
@@ -40,8 +40,15 @@ until the listing; the plugin carries what the directory asks (icon, licence, RE
   depends on Anthropic's review (RK-6).
 - Confirmation: AC-10 after the listing.
 
+## Evidence
+
+- 2026-11-14: on the owner's machine, the desktop app started sessions with `--plugin-dir` pointing at a synced copy of helps without `hooks/`; `/reload-plugins` showed 0 hooks; the lamp was missing.
+- Claude Code documentation on synced plugins (loading, "synced plugins"), read 2026-11-14, says the opposite; reported through `/feedback` by the owner.
+- `claude plugin validate` notes that the directory applies its own rules to hooks modules.
+
 ## Owner decision
 
 Decision in force since 2026-11-14 (source: the owner's brief of 2026-11-14 — "a solution that is
 simple and clear for the end user, without workarounds" — and his choice "Yes, prepare it" (translated) for the
-directory). Recorded afterwards on 2026-11-21; awaiting the owner's confirmation of this record.
+directory). Recorded afterwards on 2026-11-21. Accepted by the Product Owner on 2026-11-21 with a button ("accept all six", translated), in the
+session that prepares helps 1.0.0.

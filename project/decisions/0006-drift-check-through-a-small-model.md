@@ -1,7 +1,7 @@
 ---
 id: ADR-0006
 title: Drift check through a small Claude model on the person's account
-status: proposed
+status: accepted
 date: 2026-11-21
 deciders: Product Owner
 owner-level: yes
@@ -29,7 +29,9 @@ judge it from the last messages and commands. Serves FR-7, NFR-3, NFR-5, O-4.
 
 ## Decision
 
-Option 1.
+Option 1. It is the only way to see drift that counters miss without a server of ours or a key
+from the person; the limits keep the cost small, the lamp never goes above yellow on the model's word
+alone, and the person can switch it off.
 
 ## Consequences
 
@@ -39,8 +41,13 @@ Option 1.
 - Confirmation: mod test "drift check: yellow with the reason, never red"; README and the plugin
   README list the send.
 
+## Evidence
+
+- Mod test "drift check: yellow with the reason, never red"; the call is `$.model.complete({ model: 'haiku', maxTokens: 150, timeoutMs: 30000 })` in `src/register.js`.
+- The README and the plugin README list the send and the switch (2026-11-09 onwards).
+
 ## Owner decision
 
 Decision in force since 2026-11-09 (source: the owner's brief for helps 0.6.0, 2026-11-09, which
-included the drift check). Recorded afterwards on 2026-11-21; awaiting the owner's confirmation
-of this record.
+included the drift check). Recorded afterwards on 2026-11-21. Accepted by the Product Owner on 2026-11-21 with a button ("accept all six", translated), in the
+session that prepares helps 1.0.0.

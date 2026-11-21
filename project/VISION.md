@@ -1,7 +1,7 @@
 ---
 template: vision/1
 status: review   # draft | review | approved — the Product Owner approves
-version: 0.1.0
+version: 0.2.0
 date: 2026-11-21
 owner: Product Owner (uaskpro)
 ---
@@ -30,12 +30,12 @@ work happens, asks with buttons, and needs no commands and no account.
 - **O-1** By 2026-12-31, a person who installs helps the documented way sees the lamp in every local
   Claude Code session (terminal and desktop app) on Linux, macOS and Windows, and sees it change
   colour on the signals the README lists.
-- **O-2** In any four weeks of daily use, no new piece of work that pulls away from the main thing
+- **O-2** In the four weeks to 2027-01-31, in the owner's daily use, no new piece of work that pulls away from the main thing
   starts without being either saved for later or confirmed by the person ("do it now"), as the
   saved list and the session transcripts show.
-- **O-3** In any four weeks of daily use, no decision addressed to the person in a listed project
+- **O-3** In the four weeks to 2027-01-31, in the owner's daily use, no decision addressed to the person in a listed project
   waits more than three days without the lamp saying so.
-- **O-4** From 1.0.0, a session that works without the person, takes outside actions in turns it
+- **O-4** By 2026-12-31 (release 1.0.0), a session that works without the person, takes outside actions in turns it
   started itself, is stuck or drifts from what was asked shows it on its lamp within one turn.
 - **O-5** By 2027-03-31, helps is listed in the official Claude Code plugin directory and installs
   from there with its lamp.

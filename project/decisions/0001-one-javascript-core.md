@@ -1,7 +1,7 @@
 ---
 id: ADR-0001
 title: One core in JavaScript for all tools; no Python
-status: proposed
+status: accepted
 date: 2026-11-21
 deciders: Product Owner
 owner-level: yes
@@ -38,8 +38,14 @@ Option 2. One core in JavaScript without dependencies; each wrapper passes its o
 - Bad / cost: the CLIs need Node; Python users get no native package.
 - Confirmation: FF-2 (no imports or Node globals in the core), FF-3 (no dependencies).
 
+## Evidence
+
+- helps 0.1 (2026-11-08) had a Python core and hooks; 0.5.0 replaced them with `src/core.js`.
+- Claude Code plugin reference, mods (`hooks/register.js` is a JavaScript module run by the engine), read 2026-11-14.
+- FF-2 and FF-3 pass on every push (`tools/fitness.mjs`).
+
 ## Owner decision
 
-Decision in force since 2026-11-08 (source: the owner's requirement in this project's work record
-of 2026-11-08, translated: "no Python"; helps 0.5.0 rewritten on it). Recorded afterwards on
-2026-11-21; awaiting the owner's confirmation of this record.
+Decision in force since 2026-11-08 (source: the owner's message in the session that built helps 0.5.0,
+2026-11-08, translated: "no Python"; helps 0.5.0 rewritten on it). Recorded afterwards on 2026-11-21. Accepted by the Product Owner on 2026-11-21 with a button ("accept all six", translated), in the
+session that prepares helps 1.0.0.

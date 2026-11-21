@@ -1,7 +1,7 @@
 ---
 id: ADR-0003
 title: MIT licence
-status: proposed
+status: accepted
 date: 2026-11-21
 deciders: Product Owner
 owner-level: yes
@@ -33,10 +33,15 @@ Option 1, MIT (`LICENSE`, `package.json`, `plugin.json`).
 
 - Good: no barrier for users or for the directory; simple notice.
 - Bad / cost: anyone may reuse the code in closed products.
-- Confirmation: `claude plugin validate` reads the licence field; review at each release.
+- Confirmation: review of `LICENSE` and the manifests at each release (release checklist).
+
+## Evidence
+
+- `LICENSE` (MIT) and the `license` field in `package.json` and `plugin.json` since 0.99.3 (2026-11-14).
+- MIT is the licence most Claude Code and editor plugins use (survey of public plugin repositories, 2026-11-14).
 
 ## Owner decision
 
 Decision in force since 2026-11-14 (source: the owner's choice of MIT with a button,
-2026-11-14; released in 0.99.3). Recorded afterwards on 2026-11-21; awaiting the owner's
-confirmation of this record.
+2026-11-14; released in 0.99.3). Recorded afterwards on 2026-11-21. Accepted by the Product Owner on 2026-11-21 with a button ("accept all six", translated), in the
+session that prepares helps 1.0.0.

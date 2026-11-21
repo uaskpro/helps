@@ -26,16 +26,24 @@ An agent stops and asks the owner only before an outward action no standing rule
 hard-to-reverse fork no ADR covers, or at drift from the goal; the question gives options, their
 consequences and a default. Agents write ADRs as `proposed` only. Never request or print secrets.
 
-Standing rules of the owner: none recorded yet. Each push, tag or release needs the owner's yes
-for that action, recorded in the pull request or the release record.
+Standing rules of the owner (`mgmt.roles-and-decision-rights#R17`):
+
+- **SR-1** (2026-11-21, the owner's button "docs and CI by yourself, a release with my yes", translated):
+  the lead may push to this repository, without asking each time, changes to documents, CI and
+  tooling, and branches, when the gate is green and a verifier has reviewed the change. A release —
+  a version change on `main`, a tag, a GitHub release — and anything else outward still needs the
+  owner's yes for that release, recorded in `project/releases/X.Y.Z.md`.
 
 ## 3. Engineering baseline
 
-Follows the UASK Engineering Hub (items in review, as of 2026-11-21): `process.project-lifecycle`,
+Follows the UASK Engineering Hub — the draft base of 2026-11-21 (items in review; the published ones
+are at <https://uask.pro/knowledge/>; the rest are not public yet, so each rule this repository relies on
+is also stated in its own documents): `process.project-lifecycle`,
 `mgmt.roles-and-decision-rights`, `mgmt.governance-tiers` (tier: **standard**),
 `arch.architecture-description`, `arch.adr`, `arch.c4-model`, `arch.context-and-interfaces`,
 `arch.building-blocks-and-dependencies`, `arch.fitness-functions`, `arch.risks-and-technical-debt`,
-`arch.quality-attributes`, `req.*`, `config.semantic-versioning`, `config.conventional-commits`,
+`arch.quality-attributes`, `req.product-vision`, `req.requirements-specification`,
+`req.acceptance-criteria`, `req.scope-and-mvp`, `config.semantic-versioning`, `config.conventional-commits`,
 `quality.quality-release`. Rules below may tighten them, never weaken a MUST.
 
 ## 4. Principles
@@ -66,7 +74,8 @@ assets/         icon and screenshots
 | Decisions | `project/decisions/NNNN-*.md` |
 | Plan | `project/ROADMAP.md` |
 | Public interface (what SemVer protects) | `docs/INTERFACE.md` |
-| Done, tests, releases | `project/DEFINITION-OF-DONE.md`, `project/TEST-STRATEGY.md`, `project/RELEASING.md`, `project/releases/` |
+| Phase, gates, owner decisions | `project/LIFECYCLE.md` |
+| Done, ready, tests, releases | `project/DEFINITION-OF-DONE.md`, `project/DEFINITION-OF-READY.md`, `project/TEST-STRATEGY.md`, `project/RELEASING.md`, `project/releases/` |
 | User documentation | `README.md`, `src/PLUGIN-README.md` |
 | What changed | `CHANGELOG.md` |
 
@@ -74,8 +83,9 @@ assets/         icon and screenshots
 
 - `main` is the release channel (ADR-0007). The built plugin (`plugins/`, the marketplaces) changes
   on `main` only in a release commit; FF-1 fails otherwise. Plugin work happens on a branch
-  `feat/<topic>` or `fix/<topic>`; documents and CI may go to `main` directly (with the owner's yes
-  for the push).
+  `feat/<topic>` or `fix/<topic>`; documents, CI and tooling may go to `main` directly under SR-1
+  (gate green and reviewed before the push). Until the owner turns on a required status check for
+  `main` on GitHub, this order is the rule that keeps red changes off `main`.
 - Commits and pull request titles follow Conventional Commits (`feat(lamp): …`, `fix(decide): …`,
   `docs: …`, `ci: …`); breaking changes are marked `!`.
 - A change is merged only when it meets [project/DEFINITION-OF-DONE.md](project/DEFINITION-OF-DONE.md)

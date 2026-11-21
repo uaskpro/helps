@@ -5,7 +5,8 @@ only as the version says: a **breaking** change only in a MAJOR version, an addi
 deprecation in a MINOR, fixes in a PATCH. A deprecated item keeps working for at least one MINOR
 release. Everything not listed here is internal and may change in any release.
 
-Version of this document: 1.0.0 (with helps 1.0.0).
+Status of this document: draft for helps 1.0.0. Until 1.0.0 is released (helps 0.99.x), it describes
+the current behaviour, and changes may still be made without a MAJOR version.
 
 ## 1. What is public, in short
 
@@ -91,6 +92,7 @@ All keys optional; a value of the wrong type is ignored.
 | Variable | Effect |
 |---|---|
 | `HELPS_DATA` | the data folder |
+| `HELPS_PROJECT_ROOTS` | folders whose subfolders are projects, for `scan` and setup, separated like `PATH`; by default the current folder, its parent and `~/projects`, `~/Projects`, `~/code`, `~/src`, `~/dev`, `~/Documents`, `~/Desktop`, `~` |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | when set, the version check is off |
 
 ## 5. Commands
@@ -101,7 +103,7 @@ The same commands in the `helps` CLI (Codex, Gemini, a terminal) and in the Clau
 | Command | Options | Output |
 |---|---|---|
 | `init` | — | text |
-| `context` | `--agent claude\|codex\|gemini\|other`, `--format json\|text` | session context (JSON: the SessionStart hook format) |
+| `context` | `--agent claude\|codex\|gemini\|other`, `--format json\|text` | the session context. In the CLI, `--format json` (default) prints the SessionStart hook JSON and `text` the plain text; `json` also marks today's offers as made |
 | `status` | — | JSON: the main thing, counts |
 | `health` | `--json` | the main thing's lamp; JSON with `lamp`, `level`, `headline`, `reasons` |
 | `setup` | `--project`, `--finish` (required), `--allow`, `--source` (repeatable), `--sources-from-scan` | JSON: `project`, `finish`, `sources_added`, `decisions_waiting` |
@@ -109,15 +111,17 @@ The same commands in the `helps` CLI (Codex, Gemini, a terminal) and in the Clau
 | `idea` | `<text>`, `--by <who>` | text |
 | `ideas` | `--json`, `--last N`, `--drop N` | JSON: list of `{n, text}` |
 | `reviewed` | — | text |
-| `decisions` | `--json` | JSON: list of `{id, project, file, age_days, question}` |
+| `decisions` (alias `inbox`) | `--json` | JSON: list of `{id, project, file, age_days, question}` |
 | `answer` | `<id> <text>` | text; in Claude Code only after the person's choice (FR-11) |
 | `scan` | — | JSON: projects found near the current folder |
 | `sources` | `--add <pattern>` (repeatable) | the list of sources |
 | `doctor` | — | text: version, data folder, main thing, decision sources; in Claude Code also the surfaces where a lamp can be drawn |
-| `--version` | — | the version (CLI only) |
-| `link` | — | puts `helps` on PATH (CLI only) |
+| `--version` (alias `version` in the CLI) | — | the version |
+| `link` (CLI only) | `--dir <folder>` (default `~/.local/bin`), `--force` | puts a `helps` command on PATH: a symlink, or `helps.cmd` on Windows |
 
-Exit codes of the CLI: 0 success, 2 an error or wrong usage (the reason on stderr). A field may be added to a JSON output in a
+Exit codes of the CLI: 0 success; 2 an error or wrong usage (the reason on stderr); `link` returns 1 when
+the target exists and `--force` is not given. `context` always exits 0 (a hook must not block a session
+start); on an error it prints `{}` and the reason on stderr. A field may be added to a JSON output in a
 MINOR release; removing or renaming one is breaking.
 
 ## 6. Claude Code
