@@ -1,6 +1,6 @@
 ---
 template: prd/1
-status: review   # 0.3.0 changes FR-11, FR-14, adds FR-23, NFR-13 (1.0.1); the owner approves with release 1.0.1
+status: approved # 0.3.0 by the Product Owner, 2026-11-21, with release 1.0.1
 version: 0.3.0
 date: 2026-11-21
 vision: VISION.md 0.2.0

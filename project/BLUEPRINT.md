@@ -1,6 +1,6 @@
 ---
 template: arch.architecture-description sections (arc42 structure by reference); Hub blueprint template v2 not yet published
-status: review          # 0.3.0 for release 1.0.1; the owner approves with it
+status: approved        # 0.3.0 by the Product Owner, 2026-11-21, with release 1.0.1
 version: 0.3.0
 date: 2026-11-21
 prd: PRD.md 0.3.0

@@ -62,6 +62,7 @@ TEST-STRATEGY §5); the release checklist is the Hub's, kept in this repository
 | 2026-11-21 | G1: VISION, PRD, BLUEPRINT approved; G3: release 1.0.0 approved | buttons "Approve", "Approve 1.0.0" | this file, the documents, `releases/1.0.0.md` |
 | 2026-11-21 | release 1.0.1: fix the review's findings, appetite 1 agent-day | button "1.0.1: all fixes, 1 agent-day" | `releases/1.0.1.md` |
 | 2026-11-21 | 1.0.1 after the adversarial review: helps asks the decision itself; exact locks where possible and the limit written down; +1 agent-day | buttons "helps asks the question itself", "exact where possible + honest limit", "+1 agent-day" | this file, ADR-0008 |
+| 2026-11-21 | release 1.0.1, PRD 0.3.0 and BLUEPRINT 0.3.0 approved | "I approve 1.0.1" | `releases/1.0.1.md` |
 | 2026-11-21 | security reports through GitHub private reporting, answer within 7 days; the owner turns the setting on | button "GitHub, 7 days" | SECURITY.md |
 
 ## Change classes in Support
