@@ -1,6 +1,6 @@
 ---
 template: prd/1
-status: draft    # draft until the vision is approved (mgmt.project-foundation R2), then review
+status: approved # by the Product Owner, 2026-11-21 (G1, button "Approve")
 version: 0.2.0
 date: 2026-11-21
 vision: VISION.md 0.2.0
