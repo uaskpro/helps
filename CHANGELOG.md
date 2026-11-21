@@ -5,21 +5,25 @@ the public interface in [docs/INTERFACE.md](docs/INTERFACE.md).
 
 ## 1.0.1
 
-Fixes found by an outside review of 1.0.0. Nothing to do on update.
+Fixes found by two outside reviews of 1.0.0. Nothing to do on update.
 
-- **Security:** an answer you picked with buttons now allows exactly that answer to exactly that
-  decision, once, within 30 minutes. Before, any button answer allowed writing any answer to any
-  decision for 30 minutes.
-- Several sessions saving at the same moment no longer lose each other's ideas, sources or answers:
-  writes to the data folder take a short lock, and an answer goes into a fresh read of the project's
-  file.
-- A decision's age counts from when helps first saw it. Before, any edit of the project's file
-  made its old questions look new.
-- While paused, helps' own commands that change data are refused too; questions to you and helps'
-  read-only commands still work.
-- Outside actions: `gh api` with fields (`-f`, `-F`, `--input`) and joined options such as
-  `curl -XPOST` or `curl -d@file` are now counted.
-- The README says what green means and what Pause does not stop.
+- **Security:** in Claude Code, helps now asks you the project's own question itself and writes
+  exactly the option you pick (or what you type). Before, a button answer to any question let a
+  session write any answer to any decision for 30 minutes. A session that writes an answer directly
+  gets helps' own confirmation, with the question and the whole answer.
+- Several sessions saving at the same moment no longer lose ideas, sources or answers: writes take a
+  lock on the data folder (an exact one in Codex, Gemini and the `helps` command; a queue inside each
+  Claude Code session; a token lock between Claude Code sessions, see the README for its one limit).
+  A lock left by a stopped process is taken over after 5 seconds.
+- A decision counts as answered when its answer line is in the project's file.
+- A decision's age counts from when helps first saw it; before, any edit of the file made old
+  questions look new.
+- While paused, helps' own commands that change data are refused too, in every spelling.
+- Outside actions: `gh api` with fields or a GraphQL mutation, `gh pr create`, `gh repo edit`,
+  `gh workflow run`, and joined curl options (`-XPOST`, `-sXPOST`, `-d@file`, `-sd`) are counted;
+  GraphQL queries are not.
+- The README says what green means, what Pause does not stop, and that outside Claude Code nothing
+  technical stops a session from writing an answer you did not give.
 
 ## 1.0.0
 

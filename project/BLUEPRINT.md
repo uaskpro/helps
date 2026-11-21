@@ -198,11 +198,11 @@ sequenceDiagram
   Ses->>M: 1. helps decisions --json (tool call)
   M->>C: 2. collects decisions from listed files
   C->>F: 3. reads owner headings
-  Ses->>P: 4. asks one decision with buttons (AskUserQuestion)
-  P->>Ses: 5. picks an answer
-  Ses->>M: 6. helps answer <id> <text> (tool call)
-  M->>M: 7. allowed only right after the person's button answer, else asks the person in a dialog
-  M->>C: 8. answerDecision
+  Ses->>M: 4. helps ask <id> --option A --option B (tool call)
+  M->>C: 5. finds the decision: the project's own question
+  M->>P: 6. asks that question, the options and "Skip" (helps' own dialog)
+  P->>M: 7. picks an option or types an answer
+  M->>C: 8. answerDecision, under the data folder's lock
   C->>F: 9. writes one line under "## Owner answers (helps)"
 ```
 
@@ -271,7 +271,7 @@ serves `main` → installed copies update on a new version ([RELEASING.md](RELEA
 
 | Concern | Concept | Requirements |
 |---|---|---|
-| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand: a button pick of that answer to that decision (one write, 30 minutes) or helps' own dialog. Writes limited to the data folder, one line per answer, and — only when the person runs `helps link` — one command file. | NFR-1, NFR-2, FR-11, FR-13 |
+| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand: in Claude Code helps asks the project's own question itself (`helps ask`) or confirms a direct answer in its own dialog; outside Claude Code there is no dialog (PRD C-1, RK-11). Writes limited to the data folder, one line per answer, and — only when the person runs `helps link` — one command file. | NFR-1, NFR-2, FR-11, FR-13 |
 | Privacy | Two sends only (drift, version), both switchable, both silent without a visible lamp. Secrets are masked in the shell commands sent to the drift check, not in the person's messages or the reply (RK-8, TD-7). | NFR-3 |
 | Accessibility | Colour is never alone: the reason is written; buttons have text labels; terminal and desktop both supported. Not yet verified: contrast in light and dark themes, screen-reader output (TD-4). | NFR-7, NFR-8 |
 | Language | English in the repository and the interface; owner headings and alert prefixes in other languages through `config.json`. | NFR-11, FR-10 |
@@ -289,6 +289,7 @@ serves `main` → installed copies update on a new version ([RELEASING.md](RELEA
 | [0005](decisions/0005-lamp-shows-this-session.md) | The lamp shows this session; the main thing beside it | yes | accepted by the owner 2026-11-21 (in force since 2026-11-09) |
 | [0006](decisions/0006-drift-check-through-a-small-model.md) | Drift check through a small Claude model on the person's account | yes | accepted by the owner 2026-11-21 (in force since 2026-11-09) |
 | [0007](decisions/0007-main-is-the-release-channel.md) | `main` is the release channel | yes | accepted by the owner 2026-11-21 |
+| [0008](decisions/0008-helps-asks-the-decision-itself.md) | helps asks the decision itself | yes | accepted by the owner 2026-11-21 |
 
 ## 10. Quality requirements
 
@@ -328,12 +329,13 @@ Planning horizon: 6 months. Severity from likelihood × impact as `arch.architec
 | RK-1 | Claude Code changes the mod API or the band component; the lamp disappears | QG-4, O-1 | medium | high | High | mod tests pinned to a known version; raise the pin each MINOR; read Claude Code release notes | reduce | lead | open | 2026-12-21 |
 | RK-2 | Plugins synced from claude.ai keep arriving without `hooks/` and hide the installed copy; directory installs inherit the same | O-1, O-5 | happening now (found 2026-11-14) | high | Critical | one install channel (ADR-0004); README warns; verify after listing (AC-10) | reduce | Product Owner | occurred | at listing |
 | RK-3 | The drift check costs the person's usage noticeably | QG-3, trust | low | medium | Low | ≤150 output tokens, ≤ every 3 turns and 10 min, small model; switch off | accept (lead) | lead | open | 2026-12-21 |
-| RK-4 | Two writers change the same file at once and one change is lost (sessions sharing the data folder; an agent editing `STATE.md` while an answer is written) | QG-1, NFR-13 | happening now (found by review, 2026-11-21) | medium | High | 1.0.1: a lock on the data folder; every change applied to a fresh read and read back; the answer line also closes the decision if the state write fails. Project files have no shared lock with their agents: a narrow window remains | reduce | lead | mitigated | 2026-12-21 |
+| RK-4 | Two writers change the same file at once and one change is lost | QG-1, NFR-13 | low (after 1.0.1) | medium | Medium | 1.0.1: an in-process queue; an exclusive lock in the CLI; in the mod a token lock that waits and re-reads, taken over after 5 s; every change applied to a fresh read and read back; answers counted only from the project's file. Remaining: two Claude Code sessions on a slow share in the same 120 ms; the project's own agents editing `STATE.md` (they do not take helps' lock) | reduce | lead | mitigated | 2026-12-21 |
 | RK-5 | Codex or Gemini change their formats; the light wrappers break unnoticed | QG-4 | medium | low | Low | format tests; a person's run before each release (AC-9) | reduce | lead | open | 2026-12-21 |
 | RK-6 | The directory review rejects the mod (hooks module rules) | O-5 | medium | high | High | plugin README lists what it runs, reads, writes, sends; no dependencies; MIT | reduce | Product Owner | open | at submission |
 | RK-7 | Text in a project file reaches a session as an instruction (prompt injection) | QG-1 | low | high | Medium | only "an alert line in project X" goes to the session; tests QS-1; review rule in the Definition of Done | reduce | lead | open | 2026-12-21 |
 | RK-8 | A secret in the person's last messages or the session's reply goes to the drift model unmasked (commands are masked, messages are not) | QG-1, NFR-3 | medium | medium | Medium | the send is listed and switchable (`drift_check`); it goes only to the model of the person's own account; mask secrets in messages too (TD-7) | reduce | lead | open | 2026-12-21 |
 | RK-9 | A wrong answer is written into a project (the wrong decision id, a stale question) | QG-1 | low | medium | Low | the person sees the question and the answer before the write; one line, newest first; files are usually under Git | accept (lead) | lead | open | 2026-12-21 |
+| RK-11 | A session outside Claude Code (Codex, Gemini, the `helps` command) writes an answer the person did not give | QG-1 | low | medium | Low | the skills tell sessions to write only the person's answer; the README says that there is no technical guard there | accept (lead) | lead | open | 2026-12-21 |
 | RK-10 | An exception in a mod handler breaks a session | QG-2 | low | high | Medium | handlers pass control on; broken data tested; a general containment test (TD-2) | reduce | lead | open | 2026-12-21 |
 
 Likelihood words: low, medium, high, or "happening now"; severity from the table of `arch.architecture-review#R7`. Accepting a risk of Medium or higher needs the owner's decision (`arch.risks-and-technical-debt#R4`); RK-1, RK-2, RK-6, RK-7, RK-8 and RK-10 are being reduced, not accepted.
@@ -349,6 +351,8 @@ Likelihood words: low, medium, high, or "happening now"; severity from the table
 | TD-5 | FF-4 and FF-5 have no self-test with a broken sample (FF-1, FF-2, FF-3, FF-6, FF-7 have one) | B-7 | found, not chosen | 2 h | a broken check could pass silently | 1.1.0 | lead | 2026-11-21 |
 | TD-6 | The 6-hour limit of the version check and the two off switches have no test | B-3 | found, not chosen | 1 h | an extra request per session start if broken | 1.1.0 | lead | 2026-11-21 |
 | TD-7 | Secrets are masked in shell commands but not in the person's messages or the reply sent to the drift check (risk RK-8) | B-3 | found, not chosen | 2 h | a pasted secret can reach the model | 1.1.0 | lead | 2026-11-21 |
+| TD-9 | A decision's id is the hash of its file path and its text: editing the question, or reaching the same file by another path, makes a new decision that starts at age 0 | B-1 | found, not chosen (review 2026-11-21) | 4 h (ids that survive edits) | an edited old question can wait unseen | 1.1.0 | lead | 2026-11-21 |
+| TD-10 | `seen.json` keeps every decision id ever seen; a `state.json` that cannot be parsed is replaced on the next write | B-1 | found, not chosen | 2 h | the file grows slowly; a corrupt state loses the answered list (the answers stay in the projects' files) | 1.1.0 | lead | 2026-11-21 |
 | TD-8 | FF-2 reads line by line: a construct split over lines or hidden in a multi-line template literal can pass | B-7 | found, not chosen | 2 h (parse with a tokenizer) | a breach of DR-1 could pass the gate; review still reads every change | 1.1.0 | lead | 2026-11-21 |
 
 ## 12. Glossary

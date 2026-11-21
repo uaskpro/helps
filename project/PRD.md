@@ -62,7 +62,7 @@ agent sessions are the person's own; some run for hours without them.
 | FR-8 | A message from the person MUST reset the counters of FR-4, FR-5 and FR-6. | S-C | done |
 | FR-9 | The main thing's own state (decisions waiting, alerts, other projects touched today) MUST appear in grey beside the lamp, with its reasons in Details. | S-C, S-D | done |
 | FR-10 | helps MUST collect decisions as list items under owner headings of listed state files, skip checked items, and present them one at a time with buttons. | S-D | done |
-| FR-11 | An answer MUST be written into the asking file under `## Owner answers (helps)` only when the person picked exactly that answer to exactly that decision with buttons within 30 minutes (each such pick allows one write), or confirmed it in helps' own dialog; otherwise the write MUST be refused. | S-D | done (bound to the decision in 1.0.1) |
+| FR-11 | In Claude Code, an answer MUST be written into the asking file under `## Owner answers (helps)` only after helps itself asked the person the project's own question (`helps ask`) and wrote exactly what they picked or typed, or after the person confirmed a direct `helps answer` in helps' own dialog that shows the question and the whole answer; otherwise the write MUST be refused. In Codex, Gemini and the `helps` command there is no such dialog (constraint C-1). | S-D | done (1.0.1) |
 | FR-12 | The saved list MUST support keep, drop and make-the-main-thing, and MUST record the date of the review. | S-E | done |
 | FR-13 | A line in a listed state file that starts with an alert prefix MUST turn the lamp to alert and name the project, without passing the line's text to the session as an instruction. | S-F | done |
 | FR-14 | Pause MUST refuse every tool call of the session until the person's next message, except questions to the person and helps' own read-only commands; a command already running is not stopped. | S-G | done |
@@ -88,7 +88,7 @@ agent sessions are the person's own; some run for hours without them.
 | NFR-9 | maintainability | The core MUST have no runtime dependencies and MUST be shared, unchanged, by the Claude, Codex and Gemini wrappers. |
 | NFR-10 | flexibility | The data folder MUST be movable (`HELPS_DATA`) and shareable between machines and between the three tools. |
 | NFR-11 | licensing | helps MUST be released under the MIT licence, and the repository MUST hold only English text. |
-| NFR-13 | reliability | Several sessions and tools writing to the data folder at the same moment MUST lose no change; an answer MUST be written into a fresh read of the project's file. |
+| NFR-13 | reliability | Several sessions and tools writing to the data folder at the same moment MUST lose no change: exactly in the CLI (an exclusive lock) and inside one Claude Code session (a queue); between Claude Code sessions a token lock reduces it (RK-4). An answer MUST be written into a fresh read of the project's file, under the same lock. |
 | NFR-12 | operability | A released version MUST never change; an update or a return to an earlier version MUST be possible from released tags. |
 
 ## Acceptance criteria
@@ -118,7 +118,7 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
   wins"; mod "an alert line blinks, and its text stays out of the session…". Expected: decisions and
   alerts reach the band; no file text in the instructions.
 - [ ] **AC-6** (FR-11, NFR-2) Automated: mod "an answer goes into a project only with your hand on it",
-  "a button answer allows only that answer to that decision";
+  "helps asks the project's own question and writes only what the person picks";
   core "an answer keeps the file…", "decisions and answers". Expected: refused without the person's
   choice; with it, one line under the answers heading and nothing else changed.
 - [ ] **AC-7** (FR-14, FR-15) Automated: mod "Pause works at once: tool calls are refused until you
@@ -162,6 +162,8 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
 - Constraint: the mod API of Claude Code (`hooks/register.js`) is the only way to draw the band;
   it is documented for plugins and may change (risk RK-1 in the blueprint).
 - Constraint (owner): English only in the repository; no Python (ADR-0001, ADR-0002).
+- C-1: outside Claude Code (Codex CLI, Gemini CLI, a terminal) helps cannot show a dialog of its own, so
+  nothing technical stops a session from writing an answer the person did not give.
 - Assumption: plugins added on claude.ai keep coming to local sessions without `hooks/`. Check:
   AC-10, after the directory listing, by 2027-03-31; who: the owner.
 

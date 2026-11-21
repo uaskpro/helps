@@ -12,7 +12,7 @@
 import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES, VERSION } from './core.js'
 import {
   sessionConfig, bandConfig, BAND_DEFAULTS, TEXT_SIZE, newSessionState, ownerSpoke, ownerPresent, promptFrom, outsideAction, outsideTool, assess,
-  headline, duration, redact, DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, helpsToolNeedsPerson, grantsFrom, useGrant, pauseAllows,
+  headline, duration, redact, DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, pauseAllows,
 } from './session.js'
 
 const PANE = 'helps-lamp'
@@ -335,29 +335,55 @@ function paneButtons($, Button) {
 }
 
 const WRITE_IT = 'Write it'
+const SKIP = 'Skip'
 let confirming = 0 // helps' own "write this answer?" dialogs open now: their replies earn no credit
 
-// Null when the answer may be written: the person has just answered with buttons, or says yes now.
-// Otherwise the text the model gets instead of a write.
+const clip = (t, n) => { const x = String(t).replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n - 1) + '…' : x }
+
+async function findDecision($, id) {
+  const list = await run(makeIo($), ['decisions', '--json'])
+  return list.code === 0 ? JSON.parse(list.out).find((d) => d.id === id) || null : null
+}
+
+// helps' own question to the person, with the project's own text: a session cannot word it. Returns the
+// person's choice, or null when they skip or nobody can be asked (a script).
+async function askPerson($, text, options) {
+  confirming++
+  try { return await $.ui.ask(text, { header: 'helps', options }) } catch { return null } finally { confirming-- }
+}
+
+// `helps answer <id> <text>` in Claude Code: helps shows the project's question and the whole answer and
+// asks the person; only their yes writes it. Null when it may be written, else the text the model gets.
 async function confirmAnswer($, args) {
+  const NO = 'helps: not written. Only the person can answer: use `helps ask <id> --option …`, and helps asks them.'
   try {
-    const s = await state($)
-    if (!helpsToolNeedsPerson(args, s, await $.clock.now())) return null
-    const list = await run(makeIo($), ['decisions', '--json'])
-    const dec = list.code === 0 ? JSON.parse(list.out).find((d) => d.id === args[1]) : null
-    if (!dec) return null // nothing to write: the core says so itself
-    const clip = (t, n) => { const x = String(t).replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n - 1) + '…' : x }
-    confirming++
-    let choice
-    try {
-      choice = await $.ui.ask(
-        `Project ${clip(dec.project, 40)} asks: "${clip(dec.question, 140)}" Write "${clip(args.slice(2).join(' '), 140)}" into its file as your answer?`,
-        { header: 'helps', options: [WRITE_IT, 'Do not write'] })
-    } finally { confirming-- }
-    if (choice === WRITE_IT) return null
-  } catch { /* dismissed, or nobody to ask (a script) */ }
-  return 'helps: not written. The person did not confirm this answer. Ask them the question itself with the ' +
-    'question dialog and write only the answer they pick; never answer for them.'
+    const dec = await findDecision($, args[1])
+    if (!dec) return `helps: no open decision ${args[1]}`
+    const choice = await askPerson($,
+      `Project ${clip(dec.project, 40)} asks: "${clip(dec.question, 600)}" Write "${clip(args.slice(2).join(' '), 400)}" into its file as your answer?`,
+      [WRITE_IT, 'Do not write'])
+    return choice === WRITE_IT ? null : NO
+  } catch { return NO }
+}
+
+// `helps ask <id> --option A --option B …`: helps asks the person the project's own question with these
+// options and "Skip", and writes exactly what they pick (or type under "Other").
+async function askDecision($, args) {
+  const options = []
+  for (let i = 2; i < args.length; i++) {
+    const t = args[i]
+    const v = t === '--option' ? args[++i] : t.startsWith('--option=') ? t.slice(9) : null
+    const o = v == null ? '' : clip(v, 80)
+    if (o && o !== SKIP && !options.includes(o)) options.push(o)
+  }
+  if (!args[1] || options.length < 1 || options.length > 3) return { isError: true, result: 'helps: usage: ask <id> --option "<option>" (one to three options; helps adds "Skip")' }
+  const dec = await findDecision($, args[1])
+  if (!dec) return { isError: true, result: `helps: no open decision ${args[1]}` }
+  const choice = await askPerson($, `${clip(dec.project, 40)}: "${clip(dec.question, 600)}" What is your answer?`, options.concat(SKIP))
+  if (!choice || choice === SKIP) return { result: 'Skipped: nothing written, the question stays open.' }
+  const r = await run(makeIo($), ['answer', dec.id, choice])
+  if (r.code !== 0) return { isError: true, result: r.err || 'helps: error' }
+  return { result: `Written: ${clip(choice, 200)}` }
 }
 
 export function register(on) {
@@ -525,8 +551,6 @@ export function register(on) {
         } else if (answered) {
           ownerSpoke(s, res.text ? 'Answers: ' + String(res.text).slice(0, 600) : '', end)
           if (e.agentId === undefined) s.inOwnerTurn = true // the rest of this turn acts on the person's answer
-          const answers = res.result && typeof res.result === 'object' && res.result.answers
-          s.grants = s.grants.concat(grantsFrom(answers, end)).slice(-20)
           changed = true
         }
         if (!key && !denied && !failed) label = outsideTool(e.tool, res.isReadOnly)
@@ -554,6 +578,11 @@ export function register(on) {
     const args = Array.isArray(e.args) ? e.args.map(String) : []
     // The engine asks no permission for a tool a mod serves itself, so the one write that needs the
     // person is checked here: an answer goes into a project only with the person's hand on it.
+    if (args[0] === 'ask') {
+      const out = await askDecision($, args)
+      refresh($)
+      return out
+    }
     if (args[0] === 'answer') {
       const refusal = await confirmAnswer($, args)
       if (refusal) return { isError: true, result: refusal }
@@ -570,7 +599,6 @@ export function register(on) {
         `\nmain thing: level ${main.level}, ${errorText ? 'error ' + errorText : 'ok'}` +
         `\npanes: ${panes.length ? panes.map((p) => p.id + (p.isPlaced ? ' (placed)' : ' (not placed)')).join(', ') : 'none'}`
     }
-    if (r.code === 0 && args[0] === 'answer' && S) { try { useGrant(args, S, await $.clock.now()) } catch { /* nothing to use */ } }
     if (r.code === 0 && (args[0] === 'setup' || (args[0] === 'focus' && args.includes('--set')))) {
       // The main thing changed: the session's standing instructions follow it.
       try { contextSection = await contextText(await makeCtx(makeIo($)), 'claude', false) } catch { /* keep the old one */ }

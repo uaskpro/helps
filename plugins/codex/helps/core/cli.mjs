@@ -47,6 +47,15 @@ const io = {
   env: async (name) => process.env[name],
   now: async () => Date.now(),
   pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  // The lock: created only if absent, atomically on every local and network file system.
+  createNew: async (p, text) => {
+    await fs.mkdir(path.dirname(p), { recursive: true })
+    try { await fs.writeFile(p, text, { encoding: 'utf8', flag: 'wx' }); return true } catch (err) {
+      if (err && err.code === 'EEXIST') return false
+      throw err
+    }
+  },
+  remove: (p) => fs.rm(p, { force: true }),
   cwd: async () => process.cwd(),
 }
 

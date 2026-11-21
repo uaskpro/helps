@@ -330,6 +330,9 @@ test('Pause works at once: tool calls are refused until you write', async ($, on
   expect(JSON.stringify(write)).toContain('pressed Pause') // but nothing that changes data
   const drop: any = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '1'] })
   expect(JSON.stringify(drop)).toContain('pressed Pause')
+  for (const args of [['ideas', '--drop=1'], ['focus', '--set=x'], ['sources', '--add=/x/STATE.md'], ['answer', 'deadbeef', 'yes']]) {
+    expect(JSON.stringify(await $.tool.call({ tool: 'mcp__helps__run', args }))).toContain('pressed Pause')
+  }
   const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await again.find({ key: 'helps-resume' })).toBeDefined()
   expect(await again.find({ key: 'helps-pause' })).toBeUndefined()
@@ -376,49 +379,44 @@ test('an answer goes into a project only with your hand on it', async ($, on) =>
   expect((await helps(['answer', list[0].id, '199 euro'])).isError).toBeUndefined()
   expect(state()).toContain('## Owner answers (helps)\n- 2026-11-10: "Price and payment." → 199 euro')
   expect(calls.asked.length).toBe(2)
-  // the person picked an answer with a button a moment ago: that one answer needs no second question
-  const asked = (answers: Record<string, string>) => $.tool.call({ tool: 'AskUserQuestion', questions: [], answers } as any)
-  await asked({ [`shop: what name? (id ${list[1].id})`]: 'atlas' })
-  await helps(['answer', list[1].id, 'atlas'])
-  expect(calls.asked.length).toBe(2)
-  expect(state()).toContain('"Name." → atlas')
-  // answered once: the decision is closed, a second write is refused without asking anyone
+  // a button answer to some other question allows nothing: the next direct write is asked again
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [], answers: { ['Name? (id ' + list[1].id + ')']: 'atlas' } } as any)
+  calls.reply = 'Do not write'
   expect((await helps(['answer', list[1].id, 'atlas'])).isError).toBe(true)
-  expect(calls.asked.length).toBe(2)
+  expect(calls.asked.length).toBe(3)
+  expect(calls.asked[2]).toContain('Name.')
+  expect(state()).not.toContain('→ atlas')
 })
 
-test('a button answer allows only that answer to that decision', async ($, on) => {
+test('helps asks the project\'s own question and writes only what the person picks', async ($, on) => {
   const { files, calls, clock } = await start($, on, {
     [DATA + '/FOCUS.md']: FOCUS,
     [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
     '/home/u/projects/shop/STATE.md': STATE,
   })
   const helps = (args: string[]) => drive(clock, $.tool.call({ tool: 'mcp__helps__run', args }))
-  const asked = (answers: Record<string, string>) => $.tool.call({ tool: 'AskUserQuestion', questions: [], answers } as any)
   const state = () => files.get('/home/u/projects/shop/STATE.md')!.text
-  const [a, b] = JSON.parse((await helps(['decisions', '--json'])).result)
-  calls.reply = 'Do not write'
-  // an answer to some other question (no decision id) allows nothing
-  await asked({ 'Deploy now?': 'Yes' })
-  expect((await helps(['answer', a.id, 'Yes'])).isError).toBe(true)
-  expect(calls.asked.length).toBe(1)
-  // an answer to decision A does not allow a write to decision B
-  await asked({ [`Price? (id ${a.id})`]: '199 euro' })
-  expect((await helps(['answer', b.id, '199 euro'])).isError).toBe(true)
-  expect(calls.asked.length).toBe(2)
-  // nor another answer to decision A than the one picked
-  expect((await helps(['answer', a.id, '0 euro'])).isError).toBe(true)
-  expect(calls.asked.length).toBe(3)
-  expect(state()).not.toContain('Owner answers')
-  // the picked answer to decision A goes in without a second question
-  expect((await helps(['answer', a.id, '199 euro'])).isError).toBeUndefined()
-  expect(calls.asked.length).toBe(3)
+  const [a] = JSON.parse((await helps(['decisions', '--json'])).result)
+  // the question the person sees is the project's own text, not the session's wording
+  calls.reply = '199 euro'
+  const out = await helps(['ask', a.id, '--option', '199 euro', '--option', '249 euro'])
+  expect(out.isError).toBeUndefined()
+  expect(calls.asked[0]).toContain('Price and payment.')
   expect(state()).toContain('"Price and payment." → 199 euro')
+  // "Skip" writes nothing
+  const [b] = JSON.parse((await helps(['decisions', '--json'])).result)
+  calls.reply = 'Skip'
+  expect((await helps(['ask', b.id, '--option', 'atlas'])).result).toContain('nothing written')
+  expect(state()).not.toContain('→ atlas')
+  // no options, or an unknown decision: nothing is asked
+  expect((await helps(['ask', b.id])).isError).toBe(true)
+  expect((await helps(['ask', 'deadbeef', '--option', 'x'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(2)
 })
 
 test('tool: errors come back as plain text', async ($, on) => {
-  await start($, on, {})
-  const r = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '5'] })
+  const { clock } = await start($, on, {})
+  const r = await drive(clock, $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '5'] }))
   expect(r.isError).toBe(true)
   const odd = await $.tool.call({ tool: 'mcp__helps__run', args: ['constructor'] })
   expect(odd.isError).toBe(true)

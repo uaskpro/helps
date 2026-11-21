@@ -23,7 +23,7 @@ published with credit to you, unless you ask otherwise.
 helps reads and writes local files, and sends a short excerpt of the session to a Claude model for
 the drift check ([README → Privacy and safety](README.md#privacy-and-safety)). Of interest are, for
 example: text from a project file that becomes an instruction to a session; an answer written into
-a project without the person choosing it; a write outside the data folder and the listed state
+a project in Claude Code without the person choosing it in helps' own dialog; a write outside the data folder and the listed state
 files; a secret in a shell command that is not masked before the drift check (the person's own
 messages are sent as written, as the README says); anything sent or fetched that the README
 does not list. (`helps link`, which you run yourself, writes one command file into the folder you

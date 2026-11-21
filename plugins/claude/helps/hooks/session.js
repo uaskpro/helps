@@ -206,13 +206,18 @@ function classify(ws, found, depth) {
     if (sub === 'push' && !rest.some((t) => t === '--dry-run' || t === '-n')) found.add('git push')
     else if (sub === 'merge' && !rest.some((t) => ['--abort', '--quit', '--continue'].includes(t))) found.add('git merge')
   } else if (cmd === 'gh') {
-    if (a[0] === 'pr' && a[1] === 'merge') found.add('gh pr merge')
+    if (a[0] === 'pr' && ['merge', 'create'].includes(a[1])) found.add(`gh pr ${a[1]}`)
+    else if (a[0] === 'repo' && ['edit', 'create', 'delete', 'archive', 'rename'].includes(a[1])) found.add(`gh repo ${a[1]}`)
+    else if (a[0] === 'workflow' && a[1] === 'run') found.add('gh workflow run')
     else if (a[0] === 'release' && a[1] === 'create') found.add('gh release')
     else if (a[0] === 'api') {
       // gh api sends POST when fields or an input body are given, unless the method says otherwise
       const method = optionValue(a, ['-X', '--method'])
       const body = a.some((t) => /^(-f|-F|--field|--raw-field|--input)$/.test(t) || /^(-f|-F).+|^--(field|raw-field|input)=/.test(t))
-      if (WRITE_METHOD.test(method) || (body && !method)) found.add('gh api write')
+      // GraphQL goes by POST either way: only a mutation writes.
+      const graphql = a[1] === 'graphql'
+      const mutation = graphql && a.some((t) => /\bmutation\b/.test(t))
+      if (graphql ? mutation : (WRITE_METHOD.test(method) || (body && !method))) found.add('gh api write')
     }
   } else if (cmd === 'docker' || cmd === 'podman') {
     if (first === 'push' || (first === 'compose' && a.includes('push'))) found.add(`${cmd} push`)
@@ -236,9 +241,18 @@ function classify(ws, found, depth) {
     const target = a.find((t) => !t.startsWith('-') && !t.includes('='))
     if (target && SCRIPT.test(target)) found.add(`make ${target}`)
   } else if (cmd === 'curl') {
-    const method = optionValue(a, ['-X', '--request'])
-    const get = a.includes('-G') || a.includes('--get') || /^(GET|HEAD)$/i.test(method)
-    const writes = WRITE_METHOD.test(method) || (!get &&
+    // Short options may be joined: -sXPOST, -sd@body.json, -sSLd x.
+    let method = optionValue(a, ['-X', '--request'])
+    let joinedData = false
+    for (const t of a) {
+      const m = /^-([a-zA-Z]+)(.*)$/.exec(t)
+      if (!m || t.startsWith('--')) continue
+      const x = m[1].indexOf('X')
+      if (!method && x >= 0) method = m[1].slice(x + 1) + m[2] || a[a.indexOf(t) + 1] || ''
+      if (/[dFT]/.test(m[1]) && !/^-[dFT]/.test(t)) joinedData = true
+    }
+    const get = a.includes('-G') || a.includes('--get') || /^-[a-zA-Z]*G[a-zA-Z]*$/.test(a.find((t) => /^-[a-zA-Z]*G/.test(t)) || '') || /^(GET|HEAD)$/i.test(method)
+    const writes = WRITE_METHOD.test(method) || (!get && joinedData) || (!get &&
       a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--(data(-\w+)?|form|json|upload-file)=/.test(t) || /^-[dFT].+/.test(t)))
     const url = a.find((t) => /^https?:\/\//.test(t))
     if (writes && url && !LOCAL.test(url)) found.add(`API write ${hostOf(url)}`)
@@ -314,7 +328,6 @@ export function newSessionState(now) {
     gen: 0, // bumped when the owner speaks, so a late drift verdict about older work is dropped
     fail: { key: null, count: 0, cmd: '' },
     running: new Map(), // tool_use_id → { cmd, start }: shell commands not finished yet
-    grants: [], // [{ id, answer, at }]: one decision the person answered with buttons, and the answer they picked
     paused: false, // the person pressed Pause: tool calls are refused until they speak
     recent: [], // the session's last commands, for the drift check
     lastAnswer: '',
@@ -445,51 +458,18 @@ export function readDrift(text) {
 // What the helps tool may do without asking the person. Reading, and writing the assistant's own data
 // folder (one-line values, checked and capped), always. Writing an answer into a project's state file
 // only when the person has just answered a question with buttons: nobody else may sign for them.
-// An answer the person picked with buttons lets helps write exactly that answer to exactly that decision,
-// once, within 30 minutes. The decide skill puts the decision's id in the question as "(id 1a2b3c4d)".
-const GRANT_MS = 30 * 60000
-const DECISION_ID = /\(id ([0-9a-f]{8})\)/
-const same = (a, b) => String(a).replace(/\s+/g, ' ').trim().toLowerCase() === String(b).replace(/\s+/g, ' ').trim().toLowerCase()
 
-// Grants from the answers of one AskUserQuestion call: { "<question text>": "<picked label or typed text>" }.
-export function grantsFrom(answers, now) {
-  const out = []
-  if (!answers || typeof answers !== 'object') return out
-  for (const [question, answer] of Object.entries(answers)) {
-    const m = DECISION_ID.exec(question)
-    const picked = Array.isArray(answer) ? answer.join(', ') : String(answer ?? '')
-    if (m && picked.trim()) out.push({ id: m[1], answer: picked.slice(0, 400), at: now })
-  }
-  return out
-}
-
-function findGrant(args, s, now) {
-  if (!s || !Array.isArray(s.grants)) return -1
-  const text = args.slice(2).join(' ')
-  return s.grants.findIndex((g) => g.id === args[1] && same(g.answer, text) && now - g.at <= GRANT_MS)
-}
-
-// While paused, only a question to the person and helps' own read-only commands may run.
-const READ_ONLY = new Set(['status', 'health', 'decisions', 'inbox', 'doctor', 'context', 'scan', '--version'])
+// While paused, only a question to the person and helps' own read-only commands may run. `ask` is a
+// question to the person too: helps asks, and writes only what they pick.
+const READ_ONLY = new Set(['status', 'health', 'decisions', 'inbox', 'doctor', 'context', 'scan', '--version', 'ask'])
 export function pauseAllows(tool, args) {
   if (tool === 'AskUserQuestion') return true
   if (tool !== 'mcp__helps__run' || !Array.isArray(args) || !args.length) return false
   const [cmd, ...rest] = args.map(String)
+  const has = (opt) => rest.some((t) => t === opt || t.startsWith(opt + '='))
   if (READ_ONLY.has(cmd)) return true
-  if (cmd === 'ideas') return !rest.includes('--drop')
-  if (cmd === 'focus') return !rest.includes('--set')
-  if (cmd === 'sources') return !rest.includes('--add')
+  if (cmd === 'ideas') return !has('--drop')
+  if (cmd === 'focus') return !has('--set')
+  if (cmd === 'sources') return !has('--add')
   return false
-}
-
-export function helpsToolNeedsPerson(args, s, now) {
-  if (!Array.isArray(args) || args[0] !== 'answer') return false
-  return findGrant(args, s, now) < 0
-}
-
-// A grant is used once: after the write it is gone.
-export function useGrant(args, s, now) {
-  const i = findGrant(args, s, now)
-  if (i >= 0) s.grants.splice(i, 1)
-  s.grants = s.grants.filter((g) => now - g.at <= GRANT_MS)
 }
