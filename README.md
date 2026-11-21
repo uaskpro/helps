@@ -270,7 +270,7 @@ plugins/gemini/helps  gemini-extension.json, hooks/hooks.json, skills/, commands
 
 `plugins/` and the marketplaces are build output; do not edit them by hand, run `npm run build`.
 The marketplace serves `main`, so a change to `plugins/` reaches `main` only as a release, under a
-new version: [docs/RELEASING.md](docs/RELEASING.md). Installed copies update only when the version
+new version: [project/RELEASING.md](project/RELEASING.md). Installed copies update only when the version
 changes.
 
 The gate is one script, the same locally and in CI; it needs Node 18+ and Claude Code (`claude`):
@@ -280,7 +280,7 @@ npm run gate
 ```
 
 How it is tested, and which paths are checked by hand before a release:
-[docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md). Rules for contributors and coding agents:
+[project/TEST-STRATEGY.md](project/TEST-STRATEGY.md). Rules for contributors and coding agents:
 [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md).
 
 What has been checked, and how:

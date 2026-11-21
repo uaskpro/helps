@@ -1,7 +1,7 @@
 name: release
 # A pushed tag vX.Y.Z becomes a GitHub release: the gate, a scripted build from the tagged commit,
 # the archives and their checksums (quality.quality-release R9, R11, R21). Approval comes first,
-# in docs/releases/X.Y.Z.md; the tag is pushed only after it.
+# in project/releases/X.Y.Z.md; the tag is pushed only after it.
 on:
   push:
     tags: ['v*.*.*']
@@ -24,7 +24,7 @@ jobs:
           test "$(node -p "require('./package.json').version")" = "$v"
           grep -q "VERSION = '$v'" src/core.js
           grep -q "^## $v\$" CHANGELOG.md
-          test -f "docs/releases/$v.md"
+          test -f "project/releases/$v.md"
       - run: npm run gate
       - name: Archives and checksums
         run: |

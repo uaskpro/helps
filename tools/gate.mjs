@@ -17,7 +17,7 @@ function run(name, cmd, args, cwd = ROOT, after = () => {}) {
   const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: win })
   after()
   if (r.status !== 0) {
-    process.stderr.write(`\nGATE FAILED: ${name} (exit ${r.status ?? r.signal}). Fix it, or see docs/TEST-STRATEGY.md.\n`)
+    process.stderr.write(`\nGATE FAILED: ${name} (exit ${r.status ?? r.signal}). Fix it, or see project/TEST-STRATEGY.md.\n`)
     process.exit(1)
   }
 }
@@ -39,7 +39,7 @@ function releasedVersionUnchanged() {
   const d = git(['diff', '--quiet', tag, '--', 'plugins', '.claude-plugin', '.agents'])
   if (d.status !== 0) {
     process.stderr.write(`\nGATE FAILED: FF-1 the built plugin differs from the released ${tag}, under the same version ${version}.\n` +
-      'Raise the version and add a CHANGELOG entry (docs/RELEASING.md), or undo the change to plugins/.\n')
+      'Raise the version and add a CHANGELOG entry (project/RELEASING.md), or undo the change to plugins/.\n')
     process.exit(1)
   }
   process.stdout.write(`plugins/ equals ${tag}: ok\n`)
@@ -48,6 +48,7 @@ function releasedVersionUnchanged() {
 run('core, CLI and build output tests', process.execPath, ['--test', 'tests/core.test.mjs'])
 run('build output is up to date', process.execPath, ['build.mjs', '--check'])
 releasedVersionUnchanged()
+run('FF-2, FF-3, FF-6: dependency rules, English only', process.execPath, ['tools/fitness.mjs'])
 
 const probe = spawnSync('claude', ['--version'], { encoding: 'utf8', shell: win })
 if (probe.status !== 0) {

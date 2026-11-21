@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      # The mod tests need the Claude Code engine; it runs on Linux with Node 22, pinned (docs/TEST-STRATEGY.md).
+      # The mod tests need the Claude Code engine; it runs on Linux with Node 22, pinned (project/TEST-STRATEGY.md).
       - if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         run: npm install -g @anthropic-ai/claude-code@2.1.321
       - if: matrix.os == 'ubuntu-latest' && matrix.node == 22

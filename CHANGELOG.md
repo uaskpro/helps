@@ -1,5 +1,23 @@
 # Changelog
 
+All notable changes for users. Versions follow [Semantic Versioning](https://semver.org) against
+the public interface in [docs/INTERFACE.md](docs/INTERFACE.md).
+
+## Unreleased
+
+- The public interface is written down: data files, settings, state-file conventions, commands and
+  their JSON output ([docs/INTERFACE.md](docs/INTERFACE.md)). From 1.0.0 it changes only as the
+  version number says.
+- Every earlier version has a tag (`v0.5.0` … `v0.99.3`), so any of them can be installed again
+  ([project/RELEASING.md](project/RELEASING.md), Rollback). From now on a released version never
+  changes.
+- Releases are built by CI from their tag, with archives and SHA-256 checksums.
+- One check script, the same locally and in CI (`npm run gate`); it now also runs the mod tests
+  against Claude Code, which the README already claimed.
+- Security policy (report privately on GitHub), issue templates, a contributing guide, and a
+  screenshot of the lamp.
+- Project documents: vision, requirements, architecture, decisions, test strategy, release process.
+
 ## 0.99.3
 
 - License: MIT.
