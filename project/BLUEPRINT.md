@@ -313,8 +313,8 @@ archives and checksums) → the marketplace serves `main` → installed copies u
 | FF-3 | DR-3 | runtime dependencies in `package.json` | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
 | FF-4 | I-1, QS-1 – QS-5, AC-2 – AC-8 | mod tests against the Claude Code engine | 0 failures | merge gate, Linux + Node 22 | author (CI) | `npm run gate` |
 | FF-5 | DR-4 | build output equals the sources | no difference | merge gate | author (CI) | `node build.mjs --check` |
-| FF-7 | NFR-12, `quality.quality-release#R14` | on `main`, a version without a tag needs `project/releases/<version>.md` with the line `- [x] Approved` | present; self-test inside | merge gate on `main` | author (CI) | `node tools/fitness.mjs` |
 | FF-6 | ADR-0002, NFR-11 | Cyrillic letters in tracked text files (other languages: review) | none; self-test inside | merge gate | author (CI) | `node tools/fitness.mjs` |
+| FF-7 | NFR-12, `quality.quality-release#R14` | on `main`, a version without a tag needs `project/releases/<version>.md` with the line `- [x] Approved` | present; self-test inside | merge gate on `main` and on pull requests into `main` | author (CI) | `node tools/fitness.mjs` |
 
 ## 11. Risks and technical debt
 
@@ -345,10 +345,10 @@ Likelihood words: low, medium, high, or "happening now"; severity from the table
 | TD-2 | No general test that an exception in any handler is contained (risk RK-10) | B-3 | found, not chosen | 2 h | a regression could break sessions (QG-2) | next change to the mod's handlers | lead | 2026-11-21 |
 | TD-3 | Node 18 (end of life) stays in the matrix | CI | users on older machines | 0.5 h | CI minutes | 2.0.0 or 2027-06-30 | lead | 2026-11-21 |
 | TD-4 | Contrast and screen-reader output of the band not verified | B-3, NFR-8 | found, not chosen | 3 h | users who rely on them may miss the lamp | before 1.1.0 | lead | 2026-11-21 |
-| TD-5 | FF-4 and FF-5 have no self-test with a broken sample (FF-1, FF-2, FF-3, FF-6 have one) | B-7 | found, not chosen | 2 h | a broken check could pass silently | 1.1.0 | lead | 2026-11-21 |
+| TD-5 | FF-4 and FF-5 have no self-test with a broken sample (FF-1, FF-2, FF-3, FF-6, FF-7 have one) | B-7 | found, not chosen | 2 h | a broken check could pass silently | 1.1.0 | lead | 2026-11-21 |
 | TD-6 | The 6-hour limit of the version check and the two off switches have no test | B-3 | found, not chosen | 1 h | an extra request per session start if broken | 1.1.0 | lead | 2026-11-21 |
-| TD-8 | FF-2 reads line by line: a construct split over lines or hidden in a multi-line template literal can pass | B-7 | found, not chosen | 2 h (parse with a tokenizer) | a breach of DR-1 could pass the gate; review still reads every change | 1.1.0 | lead | 2026-11-21 |
 | TD-7 | Secrets are masked in shell commands but not in the person's messages or the reply sent to the drift check (risk RK-8) | B-3 | found, not chosen | 2 h | a pasted secret can reach the model | 1.1.0 | lead | 2026-11-21 |
+| TD-8 | FF-2 reads line by line: a construct split over lines or hidden in a multi-line template literal can pass | B-7 | found, not chosen | 2 h (parse with a tokenizer) | a breach of DR-1 could pass the gate; review still reads every change | 1.1.0 | lead | 2026-11-21 |
 
 ## 12. Glossary
 
