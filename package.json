@@ -9,6 +9,7 @@
   "scripts": {
     "build": "node build.mjs",
     "check": "node build.mjs --check",
-    "test": "node --test tests/core.test.mjs"
+    "test": "node --test tests/core.test.mjs",
+    "gate": "node tools/gate.mjs"
   }
 }

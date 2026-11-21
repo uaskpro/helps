@@ -9,6 +9,8 @@ thing in front of you, saves everything else for later, goes through the decisio
 projects with you, and puts a lamp on every Claude Code session that shows how that session is
 doing. It asks with pop-up buttons and talks in plain words; there are no commands to learn.
 
+![The helps lamp above the prompt in the Claude Code terminal: a green dot, the project, "on track", when you last wrote, and Details](assets/lamp-terminal.png)
+
 ## Install
 
 In Claude Code (terminal, VS Code, the desktop app's Code tab), one line in the prompt:
@@ -267,21 +269,24 @@ plugins/gemini/helps  gemini-extension.json, hooks/hooks.json, skills/, commands
 ```
 
 `plugins/` and the marketplaces are build output; do not edit them by hand, run `npm run build`.
-Raise the version in `src/core.js` and `package.json` with every change you push: installed
-copies update only when the version changes.
+The marketplace serves `main`, so a change to `plugins/` reaches `main` only as a release, under a
+new version: [docs/RELEASING.md](docs/RELEASING.md). Installed copies update only when the version
+changes.
+
+The gate is one script, the same locally and in CI; it needs Node 18+ and Claude Code (`claude`):
 
 ```bash
-npm test
+npm run gate
 ```
 
-```bash
-(cd plugins/claude/helps && claude plugin test . && claude plugin validate .)
-```
+How it is tested, and which paths are checked by hand before a release:
+[docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md). Rules for contributors and coding agents:
+[CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md).
 
 What has been checked, and how:
 
-- automated on every push: the core, the CLI and the build (`npm test`) on Linux, macOS and
-  Windows with Node 18 and 22; on Linux also the mod against the Claude Code engine
+- automated on every push (`npm run gate`): the core, the CLI and the build on Linux, macOS and
+  Windows with Node 18 and 22; on Linux with Node 22 also the mod against the Claude Code engine
   (`claude plugin test`);
 - by hand in Claude Code on Linux (terminal): install from this repository into a clean
   configuration, setup, the brake, decisions and answers, an alert line, the lamp turning yellow

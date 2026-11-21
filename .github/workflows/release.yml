@@ -1,0 +1,42 @@
+name: release
+# A pushed tag vX.Y.Z becomes a GitHub release: the gate, a scripted build from the tagged commit,
+# the archives and their checksums (quality.quality-release R9, R11, R21). Approval comes first,
+# in docs/releases/X.Y.Z.md; the tag is pushed only after it.
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code@2.1.321
+      - name: The tag matches the version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          test "$(node -p "require('./package.json').version")" = "$v"
+          grep -q "VERSION = '$v'" src/core.js
+          grep -q "^## $v\$" CHANGELOG.md
+          test -f "docs/releases/$v.md"
+      - run: npm run gate
+      - name: Archives and checksums
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          mkdir dist
+          for t in claude codex gemini; do (cd "plugins/$t" && zip -qr "../../dist/helps-$v-$t.zip" helps); done
+          (cd dist && sha256sum *.zip > SHA256SUMS)
+          awk -v v="## $v" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > dist/NOTES.md
+          cat dist/SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --verify-tag

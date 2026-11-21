@@ -1,0 +1,25 @@
+name: Something is off
+description: helps did something wrong, or the lamp shows the wrong thing
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: helps version
+      description: Ask a session "run helps doctor"; it prints the version.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options: [Claude Code terminal, Claude desktop app, VS Code, Remote Control, Codex CLI, Gemini CLI, other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: A screenshot of the band helps a lot. Remove anything private from it first.
+    validations:
+      required: true

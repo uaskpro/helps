@@ -1,4 +1,4 @@
-name: test
+name: gate
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
+  gate:
     strategy:
       fail-fast: false
       matrix:
@@ -15,8 +15,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm test
-      - run: node build.mjs --check
+      # The mod tests need the Claude Code engine; it runs on Linux with Node 22, pinned (docs/TEST-STRATEGY.md).
+      - if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: npm install -g @anthropic-ai/claude-code@2.1.321
+      - if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: npm run gate
+      - if: matrix.os != 'ubuntu-latest' || matrix.node != 22
+        run: npm run gate -- --without-claude
