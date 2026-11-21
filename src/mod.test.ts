@@ -408,10 +408,17 @@ test('helps asks the project\'s own question and writes only what the person pic
   calls.reply = 'Skip'
   expect((await helps(['ask', b.id, '--option', 'atlas'])).result).toContain('nothing written')
   expect(state()).not.toContain('→ atlas')
+  // "Later" offered as an option, or a dialog that comes back with notes only: nothing is written
+  calls.reply = 'Later'
+  expect((await helps(['ask', b.id, '--option', 'atlas', '--option', 'Later'])).result).toContain('nothing written')
+  calls.reply = '(notes only)'
+  expect((await helps(['ask', b.id, '--option', 'atlas'])).result).toContain('nothing written')
+  expect(state()).not.toContain('→ Later')
+  expect(state()).not.toContain('notes only')
   // no options, or an unknown decision: nothing is asked
   expect((await helps(['ask', b.id])).isError).toBe(true)
   expect((await helps(['ask', 'deadbeef', '--option', 'x'])).isError).toBe(true)
-  expect(calls.asked.length).toBe(2)
+  expect(calls.asked.length).toBe(4)
 })
 
 test('tool: errors come back as plain text', async ($, on) => {

@@ -216,11 +216,12 @@ async function withLock(ctx, fn) {
   const before = queues.get(key) || Promise.resolve()
   let release
   const mine = new Promise((resolve) => { release = resolve })
-  queues.set(key, before.then(() => mine))
+  const tail = before.then(() => mine)
+  queues.set(key, tail)
   await before
   try { return await fileLock(ctx, key, fn) } finally {
     release()
-    if (queues.get(key) === mine || queues.size > 50) queues.delete(key)
+    if (queues.get(key) === tail) queues.delete(key) // nobody queued behind this writer
   }
 }
 
@@ -236,16 +237,20 @@ async function fileLock(ctx, path, fn) {
   if (typeof io.pause !== 'function') return fn() // a wrapper that cannot wait: the queue only
   const token = `${Math.random().toString(36).slice(2, 12)}-${await io.now()}`
   const stamp = async () => `${token} ${await io.now()}\n`
-  const exclusive = typeof io.createNew === 'function' && typeof io.remove === 'function'
+  const exclusive = typeof io.createNew === 'function' && typeof io.remove === 'function' && typeof io.rename === 'function'
   for (let i = 0; i < LOCK_TRIES; i++) {
     let mine = false
     if (exclusive) {
       mine = await io.createNew(path, await stamp())
       if (!mine) {
-        // A lock just created may still be empty: then its age is the file's own.
-        let age = lockAge(await tryRead(io, path), await io.now())
-        if (age === Infinity) { try { age = (await io.now()) - (await io.stat(path)).mtimeMs } catch { age = 0 } }
-        if (age > LOCK_STALE_MS) await io.remove(path)
+        // Stale by the lock file's own time (the file system's clock, the same for every machine on a
+        // share). Only one taker can rename a stale lock away; the others try again.
+        let age = 0
+        try { age = (await io.now()) - (await io.stat(path)).mtimeMs } catch { /* gone: try again */ }
+        if (age > LOCK_STALE_MS) {
+          const aside = `${path}.${token}`
+          if (await io.rename(path, aside)) await io.remove(aside)
+        }
       }
     } else {
       const cur = ((await tryRead(io, path)) || '').trim()
@@ -582,33 +587,39 @@ async function collectDecisions(ctx, includeAnswered = false) {
 async function answerDecision(ctx, id, text) {
   text = plain(text, 400)
   if (!text) throw new Error('empty answer')
-  const dec = (await collectDecisions(ctx)).find((d) => d.id === id)
-  if (!dec) throw new Error(`no open decision ${id}`)
-  const original = String(await ctx.io.read(dec.file))
-  const eol = original.includes('\r\n') ? '\r\n' : '\n'
-  let body = original.replace(/\r\n/g, '\n')
-  const line = `- ${ctx.today}: ${answerHead(dec.question)}${text}`
-  void body
-  // The project's own agents edit this file too: the line goes into a fresh read, and is checked after.
-  const has = (t) => t.replace(/\r\n/g, '\n').split('\n').includes(line)
-  await withLock(ctx, () => updateFile(ctx.io, dec.file, (t) => {
-    if (t === null) throw new Error(`${dec.file} is gone`)
-    if (has(t)) return null
-    const e = t.includes('\r\n') ? '\r\n' : eol
-    let b = t.replace(/\r\n/g, '\n')
-    const at = b.indexOf(ANSWERS_HEADING)
-    if (at >= 0) { // the newest answer goes right under the heading
-      const head = b.slice(0, at)
-      const tail = b.slice(at + ANSWERS_HEADING.length).replace(/^\n+/, '')
-      b = head + ANSWERS_HEADING + '\n' + line + '\n' + tail
-    } else {
-      b = b.replace(/\n+$/, '') + `\n\n${ANSWERS_HEADING}\n${line}\n`
-    }
-    return e === '\n' ? b : b.replace(/\n/g, e)
-  }, has))
-  // If this step fails, the line in the file already closes the decision (answeredInFile).
-  await updateState(ctx, (d) => { d.answered = { ...(d.answered || {}), [id]: { date: ctx.today, answer: text, project: dec.project } } })
-  return { project: dec.project, file: dec.file, line }
+  // Under the lock from the check to the write: two answers to one decision cannot both go in.
+  return withLock(ctx, async () => {
+    const dec = (await collectDecisions(ctx)).find((d) => d.id === id)
+    if (!dec) throw new Error(`no open decision ${id}`)
+    const line = `- ${ctx.today}: ${answerHead(dec.question)}${text}`
+    const has = (t) => t.replace(/\r\n/g, '\n').split('\n').includes(line)
+    // The project's own agents edit this file too: the line goes into a fresh read, and is checked after.
+    await updateFile(ctx.io, dec.file, (t) => {
+      if (t === null) throw new Error(`${dec.file} is gone`)
+      if (has(t)) return null
+      if (answeredInFile(t, dec.question)) throw new Error(`decision ${id} was answered meanwhile`)
+      const e = t.includes('\r\n') ? '\r\n' : '\n'
+      let b = t.replace(/\r\n/g, '\n')
+      const at = b.indexOf(ANSWERS_HEADING)
+      if (at >= 0) { // the newest answer goes right under the heading
+        const head = b.slice(0, at)
+        const tail = b.slice(at + ANSWERS_HEADING.length).replace(/^\n+/, '')
+        b = head + ANSWERS_HEADING + '\n' + line + '\n' + tail
+      } else {
+        b = b.replace(/\n+$/, '') + `\n\n${ANSWERS_HEADING}\n${line}\n`
+      }
+      return e === '\n' ? b : b.replace(/\n/g, e)
+    }, has)
+    // If this step fails, the line in the file already closes the decision (answeredInFile).
+    const write = () => updateFile(ctx.io, ctx.f('state.json'), (t) => {
+      let d = {}
+      try { d = JSON.parse(t ?? '{}') || {} } catch { d = {} }
+      d.answered = { ...(d.answered || {}), [id]: { date: ctx.today, answer: text, project: dec.project } }
+      return JSON.stringify(d, null, 2) + '\n'
+    }, (t) => { try { return Boolean(JSON.parse(t).answered?.[id]) } catch { return false } })
+    await write()
+    return { project: dec.project, file: dec.file, line }
+  })
 }
 
 // --------------------------------------------------------------- projects

@@ -340,6 +340,11 @@ let confirming = 0 // helps' own "write this answer?" dialogs open now: their re
 
 const clip = (t, n) => { const x = String(t).replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n - 1) + '…' : x }
 
+// Two projects can share a folder name: the dialog names the folder above it too.
+const where = (dec) => { const parts = String(dec.file || '').replace(/\\/g, '/').split('/').filter(Boolean); return clip(parts.slice(-3, -1).join('/') || dec.project, 60) }
+// "Skip", "Later" and anything that is not an answer (the engine's "(notes only)") write nothing.
+const NOT_AN_ANSWER = /^\s*(skip|later|not now|\(.*\))\s*$/i
+
 async function findDecision($, id) {
   const list = await run(makeIo($), ['decisions', '--json'])
   return list.code === 0 ? JSON.parse(list.out).find((d) => d.id === id) || null : null
@@ -360,7 +365,7 @@ async function confirmAnswer($, args) {
     const dec = await findDecision($, args[1])
     if (!dec) return `helps: no open decision ${args[1]}`
     const choice = await askPerson($,
-      `Project ${clip(dec.project, 40)} asks: "${clip(dec.question, 600)}" Write "${clip(args.slice(2).join(' '), 400)}" into its file as your answer?`,
+      `Project ${where(dec)} asks: "${clip(dec.question, 600)}" Write "${clip(args.slice(2).join(' '), 400)}" into its file as your answer?`,
       [WRITE_IT, 'Do not write'])
     return choice === WRITE_IT ? null : NO
   } catch { return NO }
@@ -374,13 +379,13 @@ async function askDecision($, args) {
     const t = args[i]
     const v = t === '--option' ? args[++i] : t.startsWith('--option=') ? t.slice(9) : null
     const o = v == null ? '' : clip(v, 80)
-    if (o && o !== SKIP && !options.includes(o)) options.push(o)
+    if (o && !NOT_AN_ANSWER.test(o) && !options.includes(o)) options.push(o)
   }
   if (!args[1] || options.length < 1 || options.length > 3) return { isError: true, result: 'helps: usage: ask <id> --option "<option>" (one to three options; helps adds "Skip")' }
   const dec = await findDecision($, args[1])
   if (!dec) return { isError: true, result: `helps: no open decision ${args[1]}` }
-  const choice = await askPerson($, `${clip(dec.project, 40)}: "${clip(dec.question, 600)}" What is your answer?`, options.concat(SKIP))
-  if (!choice || choice === SKIP) return { result: 'Skipped: nothing written, the question stays open.' }
+  const choice = await askPerson($, `${where(dec)}: "${clip(dec.question, 600)}" What is your answer?`, options.concat(SKIP))
+  if (!choice || NOT_AN_ANSWER.test(choice)) return { result: 'Skipped: nothing written, the question stays open.' }
   const r = await run(makeIo($), ['answer', dec.id, choice])
   if (r.code !== 0) return { isError: true, result: r.err || 'helps: error' }
   return { result: `Written: ${clip(choice, 200)}` }

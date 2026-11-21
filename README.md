@@ -182,15 +182,17 @@ the band. A change is picked up within five minutes, or at once in a new session
     `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
 - **What helps writes.** Its own data folder, and answers to decisions: one line each, into
   Markdown state files you listed, and nowhere else. Several sessions can write to the data folder
-  at once: helps takes a short lock (a `.lock` file in it), so no change is lost. One limit: two
-  Claude Code sessions saving at the very same moment into a data folder on a slow network share
-  can still collide (Codex, Gemini and the `helps` command lock it exactly).
+  at once: helps takes a short lock (a `.lock` file in it), so no change is lost. Two limits: two
+  Claude Code sessions saving within the same tenth of a second into a data folder on a slow network
+  share can still collide, and so can any writer that hangs for more than 5 seconds while it holds
+  the lock (Codex, Gemini and the `helps` command use an exclusive lock file).
 - **No permission questions, with one exception.** helps' own tool runs without asking. In
   Claude Code an answer to a decision goes into a project only through helps' own question: helps
   shows you the project's question in its own words and writes exactly the option you pick (or what
-  you type). A session cannot word that question or answer it for you. In Codex CLI and Gemini CLI,
-  and whenever a session runs the `helps` command in a terminal, there is no such dialog: there the
-  session writes the answer on your word, and only your trust in the session stands behind it.
+  you type). Through helps, a session cannot word that question or answer it for you. In Codex CLI
+  and Gemini CLI, and whenever a session runs the `helps` command in a terminal, there is no such
+  dialog: there the session writes the answer on your word. And no plugin can stop a session that
+  edits the project's file itself: helps guards its own writes, not every file the session can touch.
 - **Text from project files is never an instruction.** Alert lines, questions and folder names
   are shown to you. They are never put into a session's instructions; a session is told only
   "an alert line in project X".

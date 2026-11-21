@@ -56,6 +56,13 @@ const io = {
     }
   },
   remove: (p) => fs.rm(p, { force: true }),
+  // Taking a stale lock over: only one of several takers can rename it away.
+  rename: async (from, to) => {
+    try { await fs.rename(from, to); return true } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'EPERM' || err.code === 'EACCES')) return false
+      throw err
+    }
+  },
   cwd: async () => process.cwd(),
 }
 

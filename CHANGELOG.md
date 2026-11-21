@@ -12,18 +12,22 @@ Fixes found by two outside reviews of 1.0.0. Nothing to do on update.
   session write any answer to any decision for 30 minutes. A session that writes an answer directly
   gets helps' own confirmation, with the question and the whole answer.
 - Several sessions saving at the same moment no longer lose ideas, sources or answers: writes take a
-  lock on the data folder (an exact one in Codex, Gemini and the `helps` command; a queue inside each
-  Claude Code session; a token lock between Claude Code sessions, see the README for its one limit).
-  A lock left by a stopped process is taken over after 5 seconds.
+  lock on the data folder (an exclusive lock file in Codex, Gemini and the `helps` command; a queue
+  inside each Claude Code session; a token lock between Claude Code sessions; see the README for the
+  two limits). A lock left by a stopped process is taken over after 5 seconds.
+- Two answers to one decision at the same moment: only the first goes in. "Later", "Skip" and a
+  dialog closed with a note only write nothing. helps' question names the folder above the project,
+  so two projects with the same name can be told apart.
 - A decision counts as answered when its answer line is in the project's file.
 - A decision's age counts from when helps first saw it; before, any edit of the file made old
   questions look new.
 - While paused, helps' own commands that change data are refused too, in every spelling.
 - Outside actions: `gh api` with fields or a GraphQL mutation, `gh pr create`, `gh repo edit`,
-  `gh workflow run`, and joined curl options (`-XPOST`, `-sXPOST`, `-d@file`, `-sd`) are counted;
-  GraphQL queries are not.
-- The README says what green means, what Pause does not stop, and that outside Claude Code nothing
-  technical stops a session from writing an answer you did not give.
+  `gh workflow run`, `gh issue comment`, `gh release upload`, `gh secret set`, joined curl options
+  (`-XPOST`, `-sXPOST`, `-d@file`, `-sd`) and a curl write to a URL in a variable are counted; GraphQL
+  queries and `curl -u user:pw` are not.
+- The README says what green means, what Pause does not stop, and what helps does not guard: answers
+  outside Claude Code, and a session that edits a project's file itself.
 
 ## 1.0.0
 

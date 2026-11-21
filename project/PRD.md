@@ -88,7 +88,7 @@ agent sessions are the person's own; some run for hours without them.
 | NFR-9 | maintainability | The core MUST have no runtime dependencies and MUST be shared, unchanged, by the Claude, Codex and Gemini wrappers. |
 | NFR-10 | flexibility | The data folder MUST be movable (`HELPS_DATA`) and shareable between machines and between the three tools. |
 | NFR-11 | licensing | helps MUST be released under the MIT licence, and the repository MUST hold only English text. |
-| NFR-13 | reliability | Several sessions and tools writing to the data folder at the same moment MUST lose no change: exactly in the CLI (an exclusive lock) and inside one Claude Code session (a queue); between Claude Code sessions a token lock reduces it (RK-4). An answer MUST be written into a fresh read of the project's file, under the same lock. |
+| NFR-13 | reliability | Several sessions and tools writing to the data folder at the same moment MUST lose no change: an exclusive lock file in the CLI and a queue inside one Claude Code session; between Claude Code sessions a token lock reduces it; a writer that hangs more than 5 s holding the lock can still lose a change (RK-4). An answer MUST be written into a fresh read of the project's file, under the same lock. |
 | NFR-12 | operability | A released version MUST never change; an update or a return to an earlier version MUST be possible from released tags. |
 
 ## Acceptance criteria
@@ -163,7 +163,8 @@ named in quotes (core tests in `tests/core.test.mjs`, mod tests in `src/mod.test
   it is documented for plugins and may change (risk RK-1 in the blueprint).
 - Constraint (owner): English only in the repository; no Python (ADR-0001, ADR-0002).
 - C-1: outside Claude Code (Codex CLI, Gemini CLI, a terminal) helps cannot show a dialog of its own, so
-  nothing technical stops a session from writing an answer the person did not give.
+  nothing technical stops a session from writing an answer the person did not give. Nor can any
+  plugin stop a session that edits a project's file itself.
 - Assumption: plugins added on claude.ai keep coming to local sessions without `hooks/`. Check:
   AC-10, after the directory listing, by 2027-03-31; who: the owner.
 

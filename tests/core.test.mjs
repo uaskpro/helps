@@ -327,6 +327,18 @@ test('sessions saving ideas at the same moment lose none of them', async () => {
   for (let i = 0; i < N; i++) assert.ok(ideas.some((t) => t.endsWith(`parallel idea ${100 + i}`)), `idea ${100 + i} lost`)
 })
 
+test('two answers to one decision at the same moment: one goes in', async () => {
+  const dir = makeProject()
+  setupFocus('--sources-from-scan')
+  const [d] = json(['decisions', '--json'])
+  const env = { ...process.env, HELPS_DATA: data, HELPS_TODAY: TODAY, HELPS_NOW: '2026-11-10 09:00', HELPS_PROJECT_ROOTS: projects }
+  const one = (text) => new Promise((resolve) => { const p = spawn(process.execPath, [CLI, 'answer', d.id, text], { env }); p.on('close', resolve) })
+  await Promise.all(['yes', 'no', 'maybe', 'later'].map(one))
+  const text = fs.readFileSync(path.join(dir, 'STATE.md'), 'utf8')
+  const lines = text.split('\n').filter((l) => l.includes(' → '))
+  assert.equal(lines.length, 1, lines.join('\n'))
+})
+
 test('ideas: save and drop', () => {
   for (const text of ['customer portal', 'expense bot']) ok(['idea', text, '--by', 'gemini'])
   let ideas = json(['ideas', '--json'])
@@ -509,6 +521,13 @@ test('outside actions: quotes, heredocs, wrappers and deploy tools', async () =>
     'gh repo edit --visibility public': 'gh repo edit',
     'gh workflow run release.yml': 'gh workflow run',
     'gh pr view 1': null,
+    'curl -uadmin:pw https://api.example.com/v1/items': null,
+    'curl -X POST "$URL"': 'API write unknown host',
+    'curl -H "Authorization: x" -d@a.json https://api.example.com/v1/items': 'API write api.example.com',
+    'curl -o out.html https://example.com/': null,
+    'gh issue comment 5 -b hi': 'gh issue comment',
+    'gh release upload v1 a.zip': 'gh release upload',
+    'gh secret set TOKEN': 'gh secret set',
     'ssh -i ~/.ssh/k git@github.com': null,
     'sftp web1': 'sftp web1',
     'git -C /x -c user.name=a push': 'git push',

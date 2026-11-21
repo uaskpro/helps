@@ -35,7 +35,9 @@ own choice is written. A direct `helps answer` still works, through helps' confi
 
 ## Consequences
 
-- Good: no session can answer in the person's name in Claude Code; one click per answer.
+- Good: in Claude Code no session can answer in the person's name through helps; one click per
+  answer. A session that edits the project's file itself, or runs the `helps` command in Bash, goes
+  around helps; no plugin can prevent that.
 - Bad / cost: the question shows the project's wording, not a plainer retelling; one to three options.
   Outside Claude Code there is no dialog (PRD C-1, RK-11).
 - Confirmation: mod tests "helps asks the project's own question and writes only what the person
