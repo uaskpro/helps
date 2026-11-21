@@ -13,7 +13,7 @@ Type: regular / hotfix · Prepared by: [name or agent] · Approver: [name] · Pl
 ## 2. Readiness
 
 - [ ] Main is green at commit `<sha>`; the tag will point to it.
-- [ ] Artefacts built by CI from the tag (`<job link>`); checksums recorded below.
+- [ ] Artefacts built by CI from the released commit (`<job link>`); checksums recorded below.
 - [ ] Staging verification done; results: [link or summary]. [hotfix: shortened — affected path plus critical paths]
 - [ ] Acceptance by owner or users: [who, when]. [hotfix: shortened — owner confirms the fix]
 - [ ] Dependency audit run (`<command>`); no known exploited vulnerabilities, or exception: [link].

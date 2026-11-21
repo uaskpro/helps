@@ -14,7 +14,7 @@ the promise: from now on the version number says what an update can break.
 - Every earlier version has a tag (`v0.5.0` … `v0.99.3`), so any of them can be installed again
   ([project/RELEASING.md](project/RELEASING.md), Rollback). From now on a released version never
   changes.
-- Releases are built by CI from their tag, with archives and SHA-256 checksums.
+- Releases are built and tagged by CI from the merged commit, with archives and SHA-256 checksums.
 - One check script, the same locally and in CI (`npm run gate`); it now also runs the mod tests
   against Claude Code, which the README already claimed.
 - Security policy (report privately on GitHub), issue templates, a contributing guide, and a

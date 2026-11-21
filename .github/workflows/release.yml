@@ -29,15 +29,18 @@ jobs:
           node-version: 22
       - name: Is this a new approved version?
         id: what
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           v="$(node -p "require('./package.json').version")"
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null || grep -q "^v$v " project/releases/tags.txt; then
+          if grep -q "^v$v " project/releases/tags.txt || gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release=no" >> "$GITHUB_OUTPUT"; echo "v$v is already released"; exit 0
           fi
-          grep -q "VERSION = '$v'" src/core.js
-          grep -q "^## $v\$" CHANGELOG.md
-          grep -q "^- \[x\] Approved" "project/releases/$v.md"
+          fail() { echo "::error::v$v is on main but not releasable: $1"; exit 1; }
+          grep -q "VERSION = '$v'" src/core.js || fail "src/core.js has another VERSION"
+          grep -q "^## $v\$" CHANGELOG.md || fail "CHANGELOG.md has no '## $v'"
+          grep -q "^- \[x\] Approved" "project/releases/$v.md" || fail "project/releases/$v.md has no '- [x] Approved'"
           echo "release=yes" >> "$GITHUB_OUTPUT"
       - if: steps.what.outputs.release == 'yes'
         run: npm install -g @anthropic-ai/claude-code@2.1.321
@@ -59,6 +62,7 @@ jobs:
           path: dist/
   publish:
     needs: build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -85,6 +89,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ needs.build.outputs.version }}"
-          git tag -a "v$v" "$GITHUB_SHA" -m "helps $v"
-          git push origin "v$v"
+          if ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            git tag -a "v$v" "$GITHUB_SHA" -m "helps $v"
+            git push origin "v$v"
+          fi
+          test "$(git rev-parse "v$v^{commit}")" = "$GITHUB_SHA" || { echo "::error::v$v already points elsewhere"; exit 1; }
           gh release create "v$v" dist/*.zip dist/SHA256SUMS --title "helps $v" --notes-file dist/NOTES.md --verify-tag

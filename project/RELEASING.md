@@ -67,10 +67,16 @@ does not list. Decides: the owner (the lead may roll back at once if a session b
   and add `uaskpro/helps` back. Tested on 2026-11-21 with v0.99.2 from a local checkout of the tag
   into a clean configuration (the clone from GitHub works once the tags are published).
 
+  Data in `~/helps-data` is kept across versions; nothing to restore.
+
 ## Tags of earlier versions
 
 `v0.5.0` … `v0.99.3` are listed in [releases/tags.txt](releases/tags.txt), each on the last commit
 released under that version (the content users last had under that number); the release workflow
 creates the tags on the first merge into `main` after 2026-11-21. They have no release records or
 archives.
-  Data in `~/helps-data` is kept across versions; nothing to restore.
+
+## If the release workflow stops halfway
+
+Run it again (Actions → release → Re-run all jobs). It looks for a GitHub release of the version,
+not only for the tag, and creates the tag and the release only where they are missing.
