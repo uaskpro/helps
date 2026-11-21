@@ -1,9 +1,9 @@
 ---
 template: arch.architecture-description sections (arc42 structure by reference); Hub blueprint template v2 not yet published
-status: approved        # by the Product Owner, 2026-11-21 (G1, button "Approve")
-version: 0.2.0
+status: review          # 0.3.0 for release 1.0.1; the owner approves with it
+version: 0.3.0
 date: 2026-11-21
-prd: PRD.md 0.2.0
+prd: PRD.md 0.3.0
 tier: standard
 owner: Product Owner (uaskpro)
 ---
@@ -271,7 +271,7 @@ serves `main` → installed copies update on a new version ([RELEASING.md](RELEA
 
 | Concern | Concept | Requirements |
 |---|---|---|
-| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand (button or dialog). Writes limited to the data folder, one line per answer, and — only when the person runs `helps link` — one command file. | NFR-1, NFR-2, FR-11, FR-13 |
+| Security | Show, never obey: file text goes to the person, the session gets only "an alert line in project X". Answers need the person's hand: a button pick of that answer to that decision (one write, 30 minutes) or helps' own dialog. Writes limited to the data folder, one line per answer, and — only when the person runs `helps link` — one command file. | NFR-1, NFR-2, FR-11, FR-13 |
 | Privacy | Two sends only (drift, version), both switchable, both silent without a visible lamp. Secrets are masked in the shell commands sent to the drift check, not in the person's messages or the reply (RK-8, TD-7). | NFR-3 |
 | Accessibility | Colour is never alone: the reason is written; buttons have text labels; terminal and desktop both supported. Not yet verified: contrast in light and dark themes, screen-reader output (TD-4). | NFR-7, NFR-8 |
 | Language | English in the repository and the interface; owner headings and alert prefixes in other languages through `config.json`. | NFR-11, FR-10 |
@@ -302,6 +302,7 @@ serves `main` → installed copies update on a new version ([RELEASING.md](RELEA
 | QS-4 | QG-2 | the data folder | `state.json` is corrupt | session start (the SessionStart hook of the CLI) | the context is produced; the session starts | exit 0, context printed | core test "the session start survives broken data" (gate); in the mod: TD-2 |
 | QS-5 | QG-3 | a session | works 2 h in its own turns | the person away | the band shows red with "working without you 2 h" in one line | one line; reason written | test "hours inside the turn you asked for are fine…" (FF-4) |
 | QS-6 | QG-4 | CI | a change to the core | Linux, macOS, Windows × Node 18, 22 | the core tests pass (two file-permission tests are skipped on Windows by design) | 6/6 jobs green | gate in CI |
+| QS-8 | QG-1 | 24 CLI processes | save an idea each, in parallel | one shared data folder | every idea is in `IDEAS.md` | 24 of 24 | core test "sessions saving ideas at the same moment lose none of them" (gate) |
 | QS-7 | QG-5 | a contributor | changes `plugins/` under a released version | a pull request | the gate fails and says how to proceed | merge blocked | FF-1 with its self-test |
 
 ### Fitness functions
@@ -327,7 +328,7 @@ Planning horizon: 6 months. Severity from likelihood × impact as `arch.architec
 | RK-1 | Claude Code changes the mod API or the band component; the lamp disappears | QG-4, O-1 | medium | high | High | mod tests pinned to a known version; raise the pin each MINOR; read Claude Code release notes | reduce | lead | open | 2026-12-21 |
 | RK-2 | Plugins synced from claude.ai keep arriving without `hooks/` and hide the installed copy; directory installs inherit the same | O-1, O-5 | happening now (found 2026-11-14) | high | Critical | one install channel (ADR-0004); README warns; verify after listing (AC-10) | reduce | Product Owner | occurred | at listing |
 | RK-3 | The drift check costs the person's usage noticeably | QG-3, trust | low | medium | Low | ≤150 output tokens, ≤ every 3 turns and 10 min, small model; switch off | accept (lead) | lead | open | 2026-12-21 |
-| RK-4 | An answer is written into `STATE.md` while an agent edits the same file; one change is lost | QG-1 | low | medium | Low | one-line insert from a fresh read; CLI writes atomically (temp + rename) | accept (lead) | lead | open | 2026-12-21 |
+| RK-4 | Two writers change the same file at once and one change is lost (sessions sharing the data folder; an agent editing `STATE.md` while an answer is written) | QG-1, NFR-13 | happening now (found by review, 2026-11-21) | medium | High | 1.0.1: a lock on the data folder; every change applied to a fresh read and read back; the answer line also closes the decision if the state write fails. Project files have no shared lock with their agents: a narrow window remains | reduce | lead | mitigated | 2026-12-21 |
 | RK-5 | Codex or Gemini change their formats; the light wrappers break unnoticed | QG-4 | medium | low | Low | format tests; a person's run before each release (AC-9) | reduce | lead | open | 2026-12-21 |
 | RK-6 | The directory review rejects the mod (hooks module rules) | O-5 | medium | high | High | plugin README lists what it runs, reads, writes, sends; no dependencies; MIT | reduce | Product Owner | open | at submission |
 | RK-7 | Text in a project file reaches a session as an instruction (prompt injection) | QG-1 | low | high | Medium | only "an alert line in project X" goes to the session; tests QS-1; review rule in the Definition of Done | reduce | lead | open | 2026-12-21 |

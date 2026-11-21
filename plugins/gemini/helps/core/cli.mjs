@@ -46,6 +46,7 @@ const io = {
   },
   env: async (name) => process.env[name],
   now: async () => Date.now(),
+  pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   cwd: async () => process.cwd(),
 }
 

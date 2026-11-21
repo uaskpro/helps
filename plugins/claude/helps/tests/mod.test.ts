@@ -58,6 +58,7 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   // helps' own confirmation carries its question, which is recorded and answered with calls.reply.
   on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => {
     if (e.afk) return { result: { answers: {}, afkTimeoutMs: 60000 }, text: '' }
+    if (e.answers) return { result: { answers: e.answers }, text: Object.values(e.answers).join(', ') } // the model's question, answered
     const q = e.questions && e.questions[0] && e.questions[0].question
     if (!q) return { result: { answers: { q: 'yes' } }, text: 'yes' }
     calls.asked.push(q)
@@ -102,6 +103,14 @@ async function start($: any, on: any, files: Record<string, string>, opts: { mti
   await $.session.start({ surface, isInteractive: surface !== null, cwd })
   await clock.settle()
   return { clock, toasts, prompts, tools, status, calls, files: d.fs }
+}
+
+// helps takes a lock on its data folder and waits for it on the engine's clock, which a test moves by hand.
+async function drive<T>(clock: any, p: Promise<T>): Promise<T> {
+  let done = false
+  p.then(() => { done = true }, () => { done = true })
+  for (let i = 0; i < 400 && !done; i++) await clock.advance(25)
+  return p
 }
 
 const DATA = '/home/u/helps-data'
@@ -316,7 +325,11 @@ test('Pause works at once: tool calls are refused until you write', async ($, on
   const sub: any = await bash($, 'ls', 'agent-1')
   expect(JSON.stringify(sub)).toContain('pressed Pause')
   const helps = await $.tool.call({ tool: 'mcp__helps__run', args: ['status'] })
-  expect(helps.isError).toBeUndefined() // helps itself still answers
+  expect(helps.isError).toBeUndefined() // helps' read-only commands still answer
+  const write: any = await $.tool.call({ tool: 'mcp__helps__run', args: ['idea', 'x', '--by', 'claude'] })
+  expect(JSON.stringify(write)).toContain('pressed Pause') // but nothing that changes data
+  const drop: any = await $.tool.call({ tool: 'mcp__helps__run', args: ['ideas', '--drop', '1'] })
+  expect(JSON.stringify(drop)).toContain('pressed Pause')
   const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await again.find({ key: 'helps-resume' })).toBeDefined()
   expect(await again.find({ key: 'helps-pause' })).toBeUndefined()
@@ -339,12 +352,12 @@ test('in the main thing\'s own session the main-thing buttons come back', async 
 })
 
 test('an answer goes into a project only with your hand on it', async ($, on) => {
-  const { files, calls } = await start($, on, {
+  const { files, calls, clock } = await start($, on, {
     [DATA + '/FOCUS.md']: FOCUS,
     [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
     '/home/u/projects/shop/STATE.md': STATE,
   })
-  const helps = (args: string[]) => $.tool.call({ tool: 'mcp__helps__run', args })
+  const helps = (args: string[]) => drive(clock, $.tool.call({ tool: 'mcp__helps__run', args }))
   const state = () => files.get('/home/u/projects/shop/STATE.md')!.text
   const list = JSON.parse((await helps(['decisions', '--json'])).result)
   // reading, saving an idea, changing the main thing: nobody is asked
@@ -364,10 +377,43 @@ test('an answer goes into a project only with your hand on it', async ($, on) =>
   expect(state()).toContain('## Owner answers (helps)\n- 2026-11-10: "Price and payment." → 199 euro')
   expect(calls.asked.length).toBe(2)
   // the person picked an answer with a button a moment ago: that one answer needs no second question
-  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as any)
+  const asked = (answers: Record<string, string>) => $.tool.call({ tool: 'AskUserQuestion', questions: [], answers } as any)
+  await asked({ [`shop: what name? (id ${list[1].id})`]: 'atlas' })
   await helps(['answer', list[1].id, 'atlas'])
   expect(calls.asked.length).toBe(2)
   expect(state()).toContain('"Name." → atlas')
+  // answered once: the decision is closed, a second write is refused without asking anyone
+  expect((await helps(['answer', list[1].id, 'atlas'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(2)
+})
+
+test('a button answer allows only that answer to that decision', async ($, on) => {
+  const { files, calls, clock } = await start($, on, {
+    [DATA + '/FOCUS.md']: FOCUS,
+    [DATA + '/inbox-sources.txt']: '/home/u/projects/*/STATE.md\n',
+    '/home/u/projects/shop/STATE.md': STATE,
+  })
+  const helps = (args: string[]) => drive(clock, $.tool.call({ tool: 'mcp__helps__run', args }))
+  const asked = (answers: Record<string, string>) => $.tool.call({ tool: 'AskUserQuestion', questions: [], answers } as any)
+  const state = () => files.get('/home/u/projects/shop/STATE.md')!.text
+  const [a, b] = JSON.parse((await helps(['decisions', '--json'])).result)
+  calls.reply = 'Do not write'
+  // an answer to some other question (no decision id) allows nothing
+  await asked({ 'Deploy now?': 'Yes' })
+  expect((await helps(['answer', a.id, 'Yes'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(1)
+  // an answer to decision A does not allow a write to decision B
+  await asked({ [`Price? (id ${a.id})`]: '199 euro' })
+  expect((await helps(['answer', b.id, '199 euro'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(2)
+  // nor another answer to decision A than the one picked
+  expect((await helps(['answer', a.id, '0 euro'])).isError).toBe(true)
+  expect(calls.asked.length).toBe(3)
+  expect(state()).not.toContain('Owner answers')
+  // the picked answer to decision A goes in without a second question
+  expect((await helps(['answer', a.id, '199 euro'])).isError).toBeUndefined()
+  expect(calls.asked.length).toBe(3)
+  expect(state()).toContain('"Price and payment." → 199 euro')
 })
 
 test('tool: errors come back as plain text', async ($, on) => {

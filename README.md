@@ -52,7 +52,9 @@ Run things by hand with `/helps:setup`, `/helps:focus`, `/helps:idea`, `/helps:d
 ## The lamp
 
 A band above the prompt: 🟢 on track, 🟡 needs a look, 🔴 needs you, 🚨 an alert (blinks for a
-minute). It names the session's project, the top reason, and how long ago you last wrote. It is
+minute). Green means that helps saw no warning sign, not that it saw everything: it reads the
+session's commands and tool names, so an outside action hidden in a script it does not know can
+pass unnoticed. It names the session's project, the top reason, and how long ago you last wrote. It is
 one short line in small text:
 
 ```
@@ -89,7 +91,8 @@ The buttons fit the reason (in Details, or on the band in the `line` and `full` 
 - **What did you do without me?**, **What's wrong?**, **Check with me** send that question into
   the session as if you typed it. Like Realign, they are answered when its current turn ends.
 - **Pause** works at once, in the middle of a turn too: from that moment the session's tool calls
-  are refused, and it is told to say where things stand and wait. Write to the session, or press
+  are refused (except questions to you and helps' own read-only commands), and it is told to say
+  where things stand and wait. A command that is already running is not stopped. Write to the session, or press
   **Resume**, to let it go on.
 - **Details** lists every signal, the outside actions with their times, the drift check's last
   verdict, and your main thing's own state. In the session that works on the main thing, **Back
@@ -178,10 +181,12 @@ the band. A change is picked up within five minutes, or at once in a new session
     Nothing about you is sent. Turn it off with `"update_check": false`; it is also off when
     `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
 - **What helps writes.** Its own data folder, and answers to decisions: one line each, into
-  Markdown state files you listed, and nowhere else.
+  Markdown state files you listed, and nowhere else. Several sessions can write to the data folder
+  at once: helps takes a short lock (a `.lock` file in it), so no change is lost.
 - **No permission questions, with one exception.** helps' own tool runs without asking. An answer
-  to a decision goes into a project only when you have just answered a question with buttons. If
-  nobody did, Claude Code asks you first: no agent can sign an answer in your name.
+  to a decision goes into a project only when you picked exactly that answer to exactly that
+  decision with buttons in the last 30 minutes, once. Otherwise helps asks you first: no agent can
+  sign an answer in your name.
 - **Text from project files is never an instruction.** Alert lines, questions and folder names
   are shown to you. They are never put into a session's instructions; a session is told only
   "an alert line in project X".

@@ -172,6 +172,18 @@ function remote(kind, args) {
 }
 
 const SCRIPT = /(^|[-_.])(merge-task|deploy|provision|release|publish|push)([-_.]|$)/i
+const WRITE_METHOD = /^(POST|PUT|PATCH|DELETE)$/i
+// The value of an option given as `-X POST`, `-XPOST`, `--method POST` or `--method=POST`.
+function optionValue(a, names) {
+  for (let i = 0; i < a.length; i++) {
+    for (const n of names) {
+      if (a[i] === n) return a[i + 1] || ''
+      if (n.startsWith('--') && a[i].startsWith(n + '=')) return a[i].slice(n.length + 1)
+      if (!n.startsWith('--') && a[i].startsWith(n) && a[i].length > n.length) return a[i].slice(n.length)
+    }
+  }
+  return ''
+}
 const LOCAL = /\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:\/|$)/
 const base = (p) => String(p || '').replace(/^.*\//, '')
 // The host of a URL, without any user:password@ in front of it.
@@ -196,7 +208,12 @@ function classify(ws, found, depth) {
   } else if (cmd === 'gh') {
     if (a[0] === 'pr' && a[1] === 'merge') found.add('gh pr merge')
     else if (a[0] === 'release' && a[1] === 'create') found.add('gh release')
-    else if (a[0] === 'api' && a.some((t, i) => (t === '-X' || t === '--method') && /^(POST|PUT|PATCH|DELETE)$/i.test(a[i + 1] || ''))) found.add('gh api write')
+    else if (a[0] === 'api') {
+      // gh api sends POST when fields or an input body are given, unless the method says otherwise
+      const method = optionValue(a, ['-X', '--method'])
+      const body = a.some((t) => /^(-f|-F|--field|--raw-field|--input)$/.test(t) || /^(-f|-F).+|^--(field|raw-field|input)=/.test(t))
+      if (WRITE_METHOD.test(method) || (body && !method)) found.add('gh api write')
+    }
   } else if (cmd === 'docker' || cmd === 'podman') {
     if (first === 'push' || (first === 'compose' && a.includes('push'))) found.add(`${cmd} push`)
   } else if (cmd === 'kubectl' || cmd === 'oc') {
@@ -219,9 +236,10 @@ function classify(ws, found, depth) {
     const target = a.find((t) => !t.startsWith('-') && !t.includes('='))
     if (target && SCRIPT.test(target)) found.add(`make ${target}`)
   } else if (cmd === 'curl') {
-    const method = a.find((t, i) => (a[i - 1] === '-X' || a[i - 1] === '--request')) || ''
-    const writes = /^(POST|PUT|PATCH|DELETE)$/i.test(method) ||
-      a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--data(-\w+)?=/.test(t))
+    const method = optionValue(a, ['-X', '--request'])
+    const get = a.includes('-G') || a.includes('--get') || /^(GET|HEAD)$/i.test(method)
+    const writes = WRITE_METHOD.test(method) || (!get &&
+      a.some((t) => /^(-d|--data|--data-\w+|-F|--form|-T|--upload-file|--json)$/.test(t) || /^--(data(-\w+)?|form|json|upload-file)=/.test(t) || /^-[dFT].+/.test(t)))
     const url = a.find((t) => /^https?:\/\//.test(t))
     if (writes && url && !LOCAL.test(url)) found.add(`API write ${hostOf(url)}`)
   } else if (cmd === 'wget') {
@@ -296,8 +314,7 @@ export function newSessionState(now) {
     gen: 0, // bumped when the owner speaks, so a late drift verdict about older work is dropped
     fail: { key: null, count: 0, cmd: '' },
     running: new Map(), // tool_use_id → { cmd, start }: shell commands not finished yet
-    answerCredits: 0, // questions the person answered with buttons and whose answers are not written yet
-    answerCreditsAt: 0,
+    grants: [], // [{ id, answer, at }]: one decision the person answered with buttons, and the answer they picked
     paused: false, // the person pressed Pause: tool calls are refused until they speak
     recent: [], // the session's last commands, for the drift check
     lastAnswer: '',
@@ -428,8 +445,51 @@ export function readDrift(text) {
 // What the helps tool may do without asking the person. Reading, and writing the assistant's own data
 // folder (one-line values, checked and capped), always. Writing an answer into a project's state file
 // only when the person has just answered a question with buttons: nobody else may sign for them.
+// An answer the person picked with buttons lets helps write exactly that answer to exactly that decision,
+// once, within 30 minutes. The decide skill puts the decision's id in the question as "(id 1a2b3c4d)".
+const GRANT_MS = 30 * 60000
+const DECISION_ID = /\(id ([0-9a-f]{8})\)/
+const same = (a, b) => String(a).replace(/\s+/g, ' ').trim().toLowerCase() === String(b).replace(/\s+/g, ' ').trim().toLowerCase()
+
+// Grants from the answers of one AskUserQuestion call: { "<question text>": "<picked label or typed text>" }.
+export function grantsFrom(answers, now) {
+  const out = []
+  if (!answers || typeof answers !== 'object') return out
+  for (const [question, answer] of Object.entries(answers)) {
+    const m = DECISION_ID.exec(question)
+    const picked = Array.isArray(answer) ? answer.join(', ') : String(answer ?? '')
+    if (m && picked.trim()) out.push({ id: m[1], answer: picked.slice(0, 400), at: now })
+  }
+  return out
+}
+
+function findGrant(args, s, now) {
+  if (!s || !Array.isArray(s.grants)) return -1
+  const text = args.slice(2).join(' ')
+  return s.grants.findIndex((g) => g.id === args[1] && same(g.answer, text) && now - g.at <= GRANT_MS)
+}
+
+// While paused, only a question to the person and helps' own read-only commands may run.
+const READ_ONLY = new Set(['status', 'health', 'decisions', 'inbox', 'doctor', 'context', 'scan', '--version'])
+export function pauseAllows(tool, args) {
+  if (tool === 'AskUserQuestion') return true
+  if (tool !== 'mcp__helps__run' || !Array.isArray(args) || !args.length) return false
+  const [cmd, ...rest] = args.map(String)
+  if (READ_ONLY.has(cmd)) return true
+  if (cmd === 'ideas') return !rest.includes('--drop')
+  if (cmd === 'focus') return !rest.includes('--set')
+  if (cmd === 'sources') return !rest.includes('--add')
+  return false
+}
+
 export function helpsToolNeedsPerson(args, s, now) {
   if (!Array.isArray(args) || args[0] !== 'answer') return false
-  const fresh = s && s.answerCredits > 0 && now - s.answerCreditsAt <= 30 * 60000
-  return !fresh
+  return findGrant(args, s, now) < 0
+}
+
+// A grant is used once: after the write it is gone.
+export function useGrant(args, s, now) {
+  const i = findGrant(args, s, now)
+  if (i >= 0) s.grants.splice(i, 1)
+  s.grants = s.grants.filter((g) => now - g.at <= GRANT_MS)
 }

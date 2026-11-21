@@ -14,7 +14,7 @@
 //   config.json        optional: extra owner-section headings and alert prefixes
 //   state.json         internal: answered decisions, when offers were made
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.0.1'
 export const TOOL = 'mcp__helps__run'
 
 const FOCUS_TEMPLATE = (project, finish, today, allow) => `# FOCUS
@@ -194,8 +194,58 @@ async function readConfig(ctx) {
 
 const readState = (ctx) => readJson(ctx, 'state.json')
 
-async function writeState(ctx, state) {
-  await ctx.io.write(ctx.f('state.json'), JSON.stringify(state, null, 2) + '\n')
+// Several sessions and tools share the data folder. A change is applied to a fresh read, written, and read
+// back; if another writer replaced the file in between and the change is gone, it is applied again to what
+// is there now. apply(text|null) returns the new text, or null when there is nothing to change; present(text)
+// says whether the change is in a text.
+//
+// Writes into the data folder also take its lock (.lock): the file system offers no "create if absent" to
+// every wrapper, so a writer puts its token in the lock, waits a moment and reads it back; it holds the lock
+// only if its token is still there. A lock older than LOCK_STALE_MS is taken over (a writer that died).
+const UPDATE_TRIES = 6
+const LOCK_WAIT_MS = 40
+const LOCK_STALE_MS = 5000
+const LOCK_TRIES = 250
+async function withLock(ctx, fn) {
+  const io = ctx.io
+  if (typeof io.pause !== 'function') return fn() // a wrapper that cannot wait: no lock
+  const path = ctx.f('.lock')
+  const token = `${Math.random().toString(36).slice(2, 12)}-${await io.now()}`
+  for (let i = 0; i < LOCK_TRIES; i++) {
+    const cur = ((await tryRead(io, path)) || '').trim()
+    const [, at] = /^\S+ (\d+)$/.exec(cur) || []
+    if (!cur || (await io.now()) - Number(at) > LOCK_STALE_MS) {
+      await io.write(path, `${token} ${await io.now()}\n`)
+      await io.pause(LOCK_WAIT_MS)
+      if (((await tryRead(io, path)) || '').startsWith(token + ' ')) {
+        try { return await fn() } finally {
+          if (((await tryRead(io, path)) || '').startsWith(token + ' ')) await io.write(path, '')
+        }
+      }
+    }
+    await io.pause(10 + Math.floor(Math.random() * 40))
+  }
+  throw new Error('could not save: the helps data folder stayed locked by another session; try again')
+}
+
+async function updateFile(io, path, apply, present) {
+  for (let i = 0; i < UPDATE_TRIES; i++) {
+    const next = apply(await tryRead(io, path))
+    if (next === null) return
+    await io.write(path, next)
+    const back = await tryRead(io, path)
+    if (back !== null && present(back)) return
+  }
+  throw new Error(`could not save ${path}: another session kept changing it; try again`)
+}
+
+// state.json changes are idempotent setters of a few keys, merged into whatever another session wrote.
+async function updateState(ctx, mutate, { lock = true } = {}) {
+  const parse = (t) => { try { const d = JSON.parse(t); return d && typeof d === 'object' && !Array.isArray(d) ? d : {} } catch { return {} } }
+  const out = (d) => JSON.stringify(d, null, 2) + '\n'
+  const changed = (t) => { const d = parse(t ?? '{}'); mutate(d); return out(d) }
+  const write = () => updateFile(ctx.io, ctx.f('state.json'), changed, (t) => changed(t) === out(parse(t)))
+  await (lock ? withLock(ctx, write) : write())
 }
 
 // ------------------------------------------------------------------ focus
@@ -239,7 +289,9 @@ async function addIdea(ctx, text, by) {
   const body = (await tryRead(ctx.io, ctx.f('IDEAS.md'))) ?? IDEAS_TEMPLATE
   by = String(by || 'other').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'other'
   const line = `- ${ctx.stamp} [${by}] ${text}`
-  await ctx.io.write(ctx.f('IDEAS.md'), body + line + '\n')
+  void body
+  const has = (t) => splitlines(t).includes(line)
+  await withLock(ctx, () => updateFile(ctx.io, ctx.f('IDEAS.md'), (t) => (t !== null && has(t) ? null : (t ?? IDEAS_TEMPLATE) + line + '\n'), has))
   return line
 }
 
@@ -252,11 +304,18 @@ async function dropIdea(ctx, n) {
   const ideas = await ideaLines(ctx)
   if (!(n >= 1 && n <= ideas.length)) throw new Error(`no idea number ${n}`)
   const target = ideas[n - 1]
-  const lines = splitlines(await ctx.io.read(ctx.f('IDEAS.md')))
-  lines.splice(lines.indexOf(target), 1)
-  await ctx.io.write(ctx.f('IDEAS.md'), lines.join('\n') + '\n')
-  const done = (await tryRead(ctx.io, ctx.f('IDEAS-done.md'))) || ''
-  await ctx.io.write(ctx.f('IDEAS-done.md'), done + `${target}  → dropped ${ctx.today}\n`)
+  const doneLine = `${target}  → dropped ${ctx.today}`
+  const hasDone = (t) => splitlines(t).includes(doneLine)
+  const gone = (t) => !splitlines(t).includes(target)
+  await withLock(ctx, async () => {
+  await updateFile(ctx.io, ctx.f('IDEAS-done.md'), (t) => (t !== null && hasDone(t) ? null : (t || '') + doneLine + '\n'), hasDone)
+  await updateFile(ctx.io, ctx.f('IDEAS.md'), (t) => {
+    if (t === null || gone(t)) return null
+    const lines = splitlines(t)
+    lines.splice(lines.indexOf(target), 1)
+    return lines.join('\n') + '\n'
+  }, gone)
+  })
   return target
 }
 
@@ -276,8 +335,8 @@ async function addSource(ctx, pattern) {
   if (!pattern || /[\r\n\u0000]/.test(pattern)) throw new Error('a source is one path or glob pattern')
   if (!isStateFile(pattern)) throw new Error('a source must be a Markdown file (*.md), for example a project\'s STATE.md')
   if ((await sourcePatterns(ctx)).includes(pattern)) return false
-  const body = (await tryRead(ctx.io, ctx.f('inbox-sources.txt'))) ?? SOURCES_TEMPLATE
-  await ctx.io.write(ctx.f('inbox-sources.txt'), body + pattern + '\n')
+  const has = (t) => splitlines(t).map((l) => l.trim()).includes(pattern)
+  await withLock(ctx, () => updateFile(ctx.io, ctx.f('inbox-sources.txt'), (t) => (t !== null && has(t) ? null : (t ?? SOURCES_TEMPLATE) + pattern + '\n'), has))
   return true
 }
 
@@ -420,8 +479,21 @@ async function itemId(path, item) {
   return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 8)
 }
 
+// The answer line helps writes; also used to see that a question already has its answer in the file.
+function answerHead(question) {
+  const q = plain(question, 600)
+  return `"${clen(q) <= 120 ? q : cut(q, 117) + '…'}" → `
+}
+function answeredInFile(text, item) {
+  const at = text.indexOf(ANSWERS_HEADING)
+  return at >= 0 && text.slice(at).includes(answerHead(item))
+}
+
 async function collectDecisions(ctx, includeAnswered = false) {
-  const answered = (await readState(ctx)).answered || {}
+  const state = await readState(ctx)
+  const answered = state.answered || {}
+  const firstSeen = state.first_seen || {}
+  const fresh = {}
   const seen = new Set()
   const result = []
   for (const pattern of await sourcePatterns(ctx)) {
@@ -436,10 +508,21 @@ async function collectDecisions(ctx, includeAnswered = false) {
       if (text === null) continue
       for (const item of ownerItems(text, ctx.config.ownerHeading)) {
         const id = await itemId(path, item)
-        if (id in answered && !includeAnswered) continue
-        result.push({ id, project: parentName(path), file: path, age_days: daysSince(ctx, st.mtimeMs), question: cut(item, 600) })
+        if ((id in answered || answeredInFile(text, item)) && !includeAnswered) continue
+        // Age counts from when the question first appeared: at most the file's last change when helps first
+        // saw it, and later edits of the file do not make it younger.
+        let since = firstSeen[id]
+        if (!since) {
+          since = isoDate(Math.min(st.mtimeMs, Date.parse(ctx.today + 'T23:59:59Z')))
+          fresh[id] = since
+        }
+        result.push({ id, project: parentName(path), file: path, age_days: Math.max(0, dayNumber(ctx.today) - dayNumber(since)), question: cut(item, 600) })
       }
     }
+  }
+  if (Object.keys(fresh).length) {
+    // Bookkeeping on a read path, so no lock: a lost entry is written again on the next read.
+    try { await updateState(ctx, (d) => { d.first_seen = { ...fresh, ...(d.first_seen || {}) } }, { lock: false }) } catch { /* next time */ }
   }
   return result
 }
@@ -452,22 +535,27 @@ async function answerDecision(ctx, id, text) {
   const original = String(await ctx.io.read(dec.file))
   const eol = original.includes('\r\n') ? '\r\n' : '\n'
   let body = original.replace(/\r\n/g, '\n')
-  const q = plain(dec.question, 600)
-  const short = clen(q) <= 120 ? q : cut(q, 117) + '…'
-  const line = `- ${ctx.today}: "${short}" → ${text}`
-  const at = body.indexOf(ANSWERS_HEADING)
-  if (at >= 0) { // the newest answer goes right under the heading
-    const head = body.slice(0, at)
-    const tail = body.slice(at + ANSWERS_HEADING.length).replace(/^\n+/, '')
-    body = head + ANSWERS_HEADING + '\n' + line + '\n' + tail
-  } else {
-    body = body.replace(/\n+$/, '') + `\n\n${ANSWERS_HEADING}\n${line}\n`
-  }
-  await ctx.io.write(dec.file, eol === '\n' ? body : body.replace(/\n/g, eol))
-  const state = await readState(ctx)
-  state.answered = state.answered || {}
-  state.answered[id] = { date: ctx.today, answer: text, project: dec.project }
-  await writeState(ctx, state)
+  const line = `- ${ctx.today}: ${answerHead(dec.question)}${text}`
+  void body
+  // The project's own agents edit this file too: the line goes into a fresh read, and is checked after.
+  const has = (t) => t.replace(/\r\n/g, '\n').split('\n').includes(line)
+  await updateFile(ctx.io, dec.file, (t) => {
+    if (t === null) throw new Error(`${dec.file} is gone`)
+    if (has(t)) return null
+    const e = t.includes('\r\n') ? '\r\n' : eol
+    let b = t.replace(/\r\n/g, '\n')
+    const at = b.indexOf(ANSWERS_HEADING)
+    if (at >= 0) { // the newest answer goes right under the heading
+      const head = b.slice(0, at)
+      const tail = b.slice(at + ANSWERS_HEADING.length).replace(/^\n+/, '')
+      b = head + ANSWERS_HEADING + '\n' + line + '\n' + tail
+    } else {
+      b = b.replace(/\n+$/, '') + `\n\n${ANSWERS_HEADING}\n${line}\n`
+    }
+    return e === '\n' ? b : b.replace(/\n/g, e)
+  }, has)
+  // If this step fails, the line in the file already closes the decision (answeredInFile).
+  await updateState(ctx, (d) => { d.answered = { ...(d.answered || {}), [id]: { date: ctx.today, answer: text, project: dec.project } } })
   return { project: dec.project, file: dec.file, line }
 }
 
@@ -653,7 +741,8 @@ export async function contextText(ctx, agent = 'claude', mark = true) {
     offers.review = ctx.today
     offered = true
   }
-  if (offered && mark) await writeState(ctx, state)
+  // Bookkeeping at session start, so no lock: at worst an offer is made twice.
+  if (offered && mark) await updateState(ctx, (d) => { d.offers = { ...(d.offers || {}), ...offers } }, { lock: false })
   lines.push(words(agent))
   lines.push(commandsNote(ctx, agent))
   return lines.join('\n')
@@ -783,10 +872,8 @@ const COMMANDS = {
     return shown.map((l, i) => `${i + 1}. ${l.slice(2)}`).join('\n')
   },
   async reviewed(ctx) {
-    const state = await readState(ctx)
-    state.last_review = ctx.today
-    await writeState(ctx, state)
-    return `Review marked: ${state.last_review}`
+    await updateState(ctx, (d) => { d.last_review = ctx.today })
+    return `Review marked: ${ctx.today}`
   },
   async decisions(ctx, argv) {
     const a = parse(argv, { json: 'flag' })

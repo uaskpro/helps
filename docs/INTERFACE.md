@@ -49,9 +49,10 @@ characters (`claude`, `codex`, `gemini`, `owner`, …). A dropped idea moves to 
 Paths or glob patterns of Markdown state files, one per line; `#` starts a comment; `~` is the home
 folder. The project's name is the name of the folder that holds the file. Only `*.md` files count.
 
-### 2.4 `state.json`
+### 2.4 `state.json` and `.lock`
 
-Internal. May change in any release; do not edit or read it from other tools.
+Internal: `state.json` holds answered decisions, when each was first seen, and offers made; `.lock`
+is the short lock writers take. May change in any release; do not edit or read it from other tools.
 
 ### 2.5 `config.json`
 
@@ -111,7 +112,7 @@ The same commands in the `helps` CLI (Codex, Gemini, a terminal) and in the Clau
 | `ideas` | `--json`, `--last N`, `--drop N` | JSON: list of `{n, text}` |
 | `reviewed` | — | text |
 | `decisions` (alias `inbox`) | `--json` | JSON: list of `{id, project, file, age_days, question}` |
-| `answer` | `<id> <text>` | text; in Claude Code only after the person's choice (FR-11) |
+| `answer` | `<id> <text>` | text. In Claude Code, written only when the person picked exactly this text for this decision with buttons (the question carries `(id <id>)`) within 30 minutes, once, or confirms it in helps' own dialog (FR-11) |
 | `scan` | — | JSON: projects found near the current folder |
 | `sources` | `--add <pattern>` (repeatable) | the list of sources |
 | `doctor` | — | text: version, data folder, main thing, decision sources; in Claude Code also the surfaces where a lamp can be drawn |

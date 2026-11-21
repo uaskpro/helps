@@ -12,7 +12,7 @@
 import { run, health as coreHealth, contextText, makeCtx, COMMAND_NAMES, VERSION } from './core.js'
 import {
   sessionConfig, bandConfig, BAND_DEFAULTS, TEXT_SIZE, newSessionState, ownerSpoke, ownerPresent, promptFrom, outsideAction, outsideTool, assess,
-  headline, duration, redact, DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, helpsToolNeedsPerson,
+  headline, duration, redact, DRIFT_SYSTEM, driftPrompt, readDrift, SESSION_DEFAULTS, isNewer, helpsToolNeedsPerson, grantsFrom, useGrant, pauseAllows,
 } from './session.js'
 
 const PANE = 'helps-lamp'
@@ -80,6 +80,7 @@ function makeIo($) {
     stat: (p, o) => $.fs.stat(p, o),
     env: (n) => envGet($, n),
     now: () => $.clock.now(),
+    pause: (ms) => new Promise((resolve) => { $.clock.after(ms, resolve) }),
     cwd: () => $.session.cwd(),
   }
 }
@@ -493,8 +494,9 @@ export function register(on) {
         if (s.inOwnerTurn) s.ownerAgents.add(e.agentId)
       }
       asked = e.agentId === undefined ? s.inOwnerTurn === true : s.ownerAgents.has(e.agentId)
-      // Paused by the person: nothing runs until they speak. Questions to them and helps itself still do.
-      if (s.paused && e.tool !== 'AskUserQuestion' && e.tool !== 'mcp__helps__run') return { deny: PAUSED }
+      // Paused by the person: nothing runs until they speak, except a question to them and helps' own
+      // read-only commands. A command that is already running is not stopped.
+      if (s.paused && !pauseAllows(e.tool, Array.isArray(e.args) ? e.args : [])) return { deny: PAUSED }
       if (e.tool === 'Bash' && typeof e.command === 'string') {
         label = outsideAction(e.command)
         key = e.command.replace(/\s+/g, ' ').trim().slice(0, 200)
@@ -524,9 +526,7 @@ export function register(on) {
           ownerSpoke(s, res.text ? 'Answers: ' + String(res.text).slice(0, 600) : '', end)
           if (e.agentId === undefined) s.inOwnerTurn = true // the rest of this turn acts on the person's answer
           const answers = res.result && typeof res.result === 'object' && res.result.answers
-          const count = answers && typeof answers === 'object' ? Object.keys(answers).length : 1
-          s.answerCredits = Math.min(8, (end - s.answerCreditsAt > 30 * 60000 ? 0 : s.answerCredits) + Math.max(1, count))
-          s.answerCreditsAt = end
+          s.grants = s.grants.concat(grantsFrom(answers, end)).slice(-20)
           changed = true
         }
         if (!key && !denied && !failed) label = outsideTool(e.tool, res.isReadOnly)
@@ -570,7 +570,7 @@ export function register(on) {
         `\nmain thing: level ${main.level}, ${errorText ? 'error ' + errorText : 'ok'}` +
         `\npanes: ${panes.length ? panes.map((p) => p.id + (p.isPlaced ? ' (placed)' : ' (not placed)')).join(', ') : 'none'}`
     }
-    if (r.code === 0 && args[0] === 'answer' && S && S.answerCredits > 0) S.answerCredits--
+    if (r.code === 0 && args[0] === 'answer' && S) { try { useGrant(args, S, await $.clock.now()) } catch { /* nothing to use */ } }
     if (r.code === 0 && (args[0] === 'setup' || (args[0] === 'focus' && args.includes('--set')))) {
       // The main thing changed: the session's standing instructions follow it.
       try { contextSection = await contextText(await makeCtx(makeIo($)), 'claude', false) } catch { /* keep the old one */ }

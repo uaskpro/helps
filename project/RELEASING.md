@@ -21,7 +21,7 @@ doubt, MAJOR. A released version never changes; FF-1 enforces it.
    **Breaking**, **Deprecated**, **Security**; for a MAJOR, the upgrade steps.
 4. **Record.** Copy [releases/TEMPLATE.md](releases/TEMPLATE.md) to `project/releases/X.Y.Z.md` and
    fill sections 1–5 before anything is published.
-5. **Gate.** `npm run gate` green on the release commit; the G2 hand checks of
+5. **Gate.** `npm run gate` green on the release commit; the Q2 hand checks of
    [TEST-STRATEGY.md](TEST-STRATEGY.md) §6 done and recorded.
 6. **Approval.** The owner approves against the record (section 6 of it, the line
    `- [x] Approved …`), with the date. A green pipeline alone is not an approval: FF-7 keeps an
@@ -30,7 +30,7 @@ doubt, MAJOR. A released version never changes; FF-1 enforces it.
    the release workflow reruns the gate, builds the archives and checksums from that commit, tags it
    `vX.Y.Z` and creates the GitHub release. Copy the checksums into the record in the next documents
    change. Agents do not push to `main` or push tags.
-8. **Verify (G3).** Clean configuration: install from the marketplace, new session, the band shows,
+8. **Verify (Q3).** Clean configuration: install from the marketplace, new session, the band shows,
    `helps doctor` prints X.Y.Z. Record the result and close the record.
 
 A hotfix is the smallest change that removes the defect, as a PATCH, with a regression test, through

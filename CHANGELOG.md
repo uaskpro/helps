@@ -3,6 +3,24 @@
 All notable changes for users. Versions follow [Semantic Versioning](https://semver.org) against
 the public interface in [docs/INTERFACE.md](docs/INTERFACE.md).
 
+## 1.0.1
+
+Fixes found by an outside review of 1.0.0. Nothing to do on update.
+
+- **Security:** an answer you picked with buttons now allows exactly that answer to exactly that
+  decision, once, within 30 minutes. Before, any button answer allowed writing any answer to any
+  decision for 30 minutes.
+- Several sessions saving at the same moment no longer lose each other's ideas, sources or answers:
+  writes to the data folder take a short lock, and an answer goes into a fresh read of the project's
+  file.
+- A decision's age counts from when helps first saw it. Before, any edit of the project's file
+  made its old questions look new.
+- While paused, helps' own commands that change data are refused too; questions to you and helps'
+  read-only commands still work.
+- Outside actions: `gh api` with fields (`-f`, `-F`, `--input`) and joined options such as
+  `curl -XPOST` or `curl -d@file` are now counted.
+- The README says what green means and what Pause does not stop.
+
 ## 1.0.0
 
 The first stable release. Nothing changes in how helps works compared with 0.99.3; what changes is

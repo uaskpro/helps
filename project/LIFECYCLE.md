@@ -6,8 +6,8 @@ owner wrote in another language).
 
 ## Current phase
 
-**Release** of 1.0.0: G1 and G3 passed on 2026-11-21; 1.0.0 reaches users when the owner merges the
-pull request `release/1.0.0` → `main`. 0.99.3 is in Support until then.
+**Support** of 1.0.0 (released 2026-11-21). A fix release 1.0.1 is prepared on `fix/1.0.1`
+(class fix; findings of an outside review).
 
 ## Gates
 
@@ -32,7 +32,9 @@ pull request `release/1.0.0` → `main`. 0.99.3 is in Support until then.
   vulnerability reporting (SECURITY.md; until then the fallback in SECURITY.md applies).
 - Require the status check `gate` for `main`: Settings → Rules → a branch ruleset for `main` with
   "Require status checks to pass". Until then SR-1 is the rule that keeps red changes off `main`.
-- Merge the pull request `release/1.0.0` → `main` (this session cannot push `main` or tags).
+- Push the tags `v0.99.0` … `v0.99.3` once (GitHub refuses them to the workflow token): see
+  RELEASING.md, "Tags of earlier versions".
+- Approve release 1.0.1 and PRD/BLUEPRINT 0.3.0; merge the pull request `fix/1.0.1` → `main`.
 
 ## The owner's brief for this foundation run
 
@@ -58,6 +60,7 @@ TEST-STRATEGY §5); the release checklist is the Hub's, kept in this repository
 | 2026-11-21 | standing rule SR-1 (documents and CI by the lead; a release with the owner's yes) | button "docs and CI by yourself, a release with my yes" | AGENTS.md §2 |
 | 2026-11-21 | publish the tags `v0.5.0` … `v0.99.3` | button "Yes, publish" | this file |
 | 2026-11-21 | G1: VISION, PRD, BLUEPRINT approved; G3: release 1.0.0 approved | buttons "Approve", "Approve 1.0.0" | this file, the documents, `releases/1.0.0.md` |
+| 2026-11-21 | release 1.0.1: fix the review's findings, appetite 1 agent-day | button "1.0.1: all fixes, 1 agent-day" | `releases/1.0.1.md` |
 | 2026-11-21 | security reports through GitHub private reporting, answer within 7 days; the owner turns the setting on | button "GitHub, 7 days" | SECURITY.md |
 
 ## Change classes in Support
